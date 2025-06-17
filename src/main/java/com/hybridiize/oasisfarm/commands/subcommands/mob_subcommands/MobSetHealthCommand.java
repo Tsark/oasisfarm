@@ -4,6 +4,9 @@ import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
 public class MobSetHealthCommand extends MobSubCommand {
     @Override
     public String getName() { return "sethealth"; }
@@ -14,13 +17,14 @@ public class MobSetHealthCommand extends MobSubCommand {
 
     @Override
     public void perform(Player player, String[] args) {
-        if (args.length < 5) {
+        if (args.length < 4) {
             player.sendMessage(ChatColor.RED + "Usage: " + getSyntax());
             return;
         }
 
-        String farmId = args[2];
-        String mobType = args[3].toUpperCase();
+        String templateId = args[2]; // No farm needed now
+        String name = Arrays.stream(args).skip(3).collect(Collectors.joining(" "));
+
         double health;
         try {
             health = Double.parseDouble(args[4]);

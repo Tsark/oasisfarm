@@ -1,31 +1,27 @@
 package com.hybridiize.oasisfarm.farm;
 
-import java.util.List;
+import java.util.Map;
 
 public class Farm {
     private final String id;
     private final Region region;
     private final int maxMobs;
-    private final List<MobInfo> mobInfoList;
+    private final int entryCooldown;
+    // This is the major change: Map<TemplateID, SpawnChance>
+    private final Map<String, Double> mobs;
 
-    public Farm(String id, Region region, int maxMobs, List<MobInfo> mobInfoList) {
+    public Farm(String id, Region region, int maxMobs, int entryCooldown, Map<String, Double> mobs) {
         this.id = id;
         this.region = region;
         this.maxMobs = maxMobs;
-        this.mobInfoList = mobInfoList;
+        this.entryCooldown = entryCooldown;
+        this.mobs = mobs;
     }
 
-    // --- NEW GETTER METHODS ---
-    public String getId() {
-        return id;
-    }
-    public Region getRegion() {
-        return region;
-    }
-    public int getMaxMobs() {
-        return maxMobs;
-    }
-    public List<MobInfo> getMobInfoList() {
-        return mobInfoList;
-    }
+    // --- GETTERS ---
+    public String getId() { return id; }
+    public Region getRegion() { return region; }
+    public int getMaxMobs() { return maxMobs; }
+    public int getEntryCooldown() { return entryCooldown; }
+    public Map<String, Double> getMobs() { return mobs; }
 }

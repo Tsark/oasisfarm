@@ -15,18 +15,18 @@ public class MobSetItemCommand extends MobSubCommand {
     @Override
     public String getDescription() { return "Sets the equipment for a mob type."; }
     @Override
-    public String getSyntax() { return "/of mob setitem <farm> <mob> <slot> <item>"; }
+    public String getSyntax() { return "/of mob setitem <template_id> <item...>"; }
 
     @Override
     public void perform(Player player, String[] args) {
-        if (args.length < 6) {
+        if (args.length < 4) {
             player.sendMessage(ChatColor.RED + "Usage: " + getSyntax());
             player.sendMessage(ChatColor.RED + "Valid slots: HAND, OFFHAND, HELMET, CHESTPLATE, LEGGINGS, BOOTS");
             return;
         }
 
-        String farmId = args[2];
-        String mobType = args[3].toUpperCase();
+        String templateId = args[2]; // No farm needed now
+        String name = Arrays.stream(args).skip(3).collect(Collectors.joining(" "));
         String slot = args[4].toUpperCase();
         String itemName = args[5].toUpperCase();
 

@@ -2,6 +2,7 @@ package com.hybridiize.oasisfarm;
 
 import com.hybridiize.oasisfarm.commands.CommandManager;
 import com.hybridiize.oasisfarm.listeners.MobKillListener;
+import com.hybridiize.oasisfarm.listeners.PlayerMoveListener;
 import com.hybridiize.oasisfarm.listeners.WandListener;
 import com.hybridiize.oasisfarm.managers.*;
 import org.bukkit.Bukkit;
@@ -33,7 +34,7 @@ public final class Oasisfarm extends JavaPlugin {
         this.confirmationManager = new PendingConfirmationManager(); // <-- INITIALIZE IT
 
         // Load data from config
-        this.configManager.loadFarms();
+        this.configManager.loadAllConfigs();
 
         // Register commands - THIS IS THE FIX FOR THE SECOND ERROR
         getCommand("oasisfarm").setExecutor(new CommandManager(selectionManager, confirmationManager));
@@ -41,6 +42,7 @@ public final class Oasisfarm extends JavaPlugin {
         // Register event listeners
         getServer().getPluginManager().registerEvents(new WandListener(selectionManager), this);
         getServer().getPluginManager().registerEvents(new MobKillListener(this), this);
+        getServer().getPluginManager().registerEvents(new PlayerMoveListener(this), this);
 
         getLogger().info("Oasisfarm has been enabled successfully!");
     }

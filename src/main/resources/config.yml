@@ -1,30 +1,17 @@
 # OasisFarm Configuration File
 
-# This setting controls how often (in server ticks, 20 ticks = 1 second) the plugin checks farms.
-# We will use this in a later step.
 farm-check-interval: 100
 
 farms:
   starter_zone:
+    entry-cooldown: 60
     region:
       world: "world"
       pos1: "100,64,100"
       pos2: "200,80,200"
     max-mobs: 50
     mobs:
-      ZOMBIE:
-        spawn-chance: 0.80
-        display-name: "&cStarter Zombie"
-        health: 15.0
-        equipment:
-          HAND: "WOODEN_SWORD"
-        rewards:
-          - "msg %player_name% &aYou killed a zombie and earned $10!"
-          - "eco give %player_name% 10"
-      SKELETON:
-        spawn-chance: 0.20
-        kill-permission: "oasisfarm.kill.skeleton_knight"
-        kill-cooldown: 5
-        rewards:
-          - "msg %player_name% &eYou killed a skeleton! Here is $25!"
-          - "eco give %player_name% 25"
+      # Mob templates are now defined in mob-templates.yml
+      # Format is: <template_id>: <spawn_chance>
+      starter_zombie: 0.80
+      starter_skeleton: 0.20

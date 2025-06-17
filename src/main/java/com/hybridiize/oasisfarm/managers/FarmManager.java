@@ -90,30 +90,40 @@ public class FarmManager {
     }
 
     private void spawnMobInFarm(Farm farm) {
-        if (farm.getMobInfoList().isEmpty()) {
+        // Get the map of <TemplateID, SpawnChance>
+        Map<String, Double> mobs = farm.getMobs();
+        if (mobs.isEmpty()) {
             return; // No mob types are defined for this farm.
         }
 
-        // --- Mob Selection Logic (same as before) ---
+        // --- Mob Selection Logic (New Version) ---
         double roll = ThreadLocalRandom.current().nextDouble();
         double cumulativeChance = 0.0;
-        MobInfo mobToSpawnInfo = null;
+        String chosenTemplateId = null;
 
-        for (MobInfo mobInfo : farm.getMobInfoList()) {
-            cumulativeChance += mobInfo.getSpawnChance();
+        for (Map.Entry<String, Double> entry : mobs.entrySet()) {
+            cumulativeChance += entry.getValue();
             if (roll <= cumulativeChance) {
-                mobToSpawnInfo = mobInfo;
+                chosenTemplateId = entry.getKey();
                 break;
             }
         }
 
-        if (mobToSpawnInfo == null) {
-            mobToSpawnInfo = farm.getMobInfoList().get(0);
+        if (chosenTemplateId == null) {
+            // Failsafe: if chances don't add up to 1.0, pick one randomly from the list.
+            chosenTemplateId = new ArrayList<>(mobs.keySet()).get(0);
         }
 
-        // --- NEW Spawning Logic with Safety Checks ---
+        // Get the full MobInfo template from the ConfigManager
+        MobInfo mobToSpawnInfo = plugin.getConfigManager().getMobTemplate(chosenTemplateId);
+        if (mobToSpawnInfo == null) {
+            plugin.getLogger().warning("Attempted to spawn a null mob template: " + chosenTemplateId);
+            return;
+        }
+
+        // --- Spawning Logic with Safety Checks (same as before) ---
         final MobInfo finalMobToSpawnInfo = mobToSpawnInfo;
-        final int MAX_SPAWN_ATTEMPTS = 10; // Try 10 times to find a safe spot
+        final int MAX_SPAWN_ATTEMPTS = 10;
 
         new BukkitRunnable() {
             @Override
@@ -122,20 +132,18 @@ public class FarmManager {
                     Location spawnLocation = getRandomLocationInRegion(farm.getRegion());
 
                     if (isSafeLocation(spawnLocation)) {
-                        // Safe location found, proceed with spawning
                         if (!spawnLocation.getChunk().isLoaded()) {
-                            return; // Chunk got unloaded during check, abort.
+                            return;
                         }
 
                         LivingEntity spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, finalMobToSpawnInfo.getType());
-                        trackedMobs.put(spawnedMob.getUniqueId(), farm.getId());
+                        // IMPORTANT: We now track mobs by their TEMPLATE ID.
+                        trackedMobs.put(spawnedMob.getUniqueId(), finalMobToSpawnInfo.getTemplateId());
                         applyMobAttributes(spawnedMob, finalMobToSpawnInfo);
 
-                        return; // Exit the loop and runnable, we're done
+                        return;
                     }
                 }
-                // If the loop finishes, no safe spot was found after 10 tries.
-                // plugin.getLogger().warning("Could not find a safe spawn location in farm '" + farm.getId() + "' after " + MAX_SPAWN_ATTEMPTS + " attempts.");
             }
         }.runTask(plugin);
     }
@@ -243,6 +251,10 @@ public class FarmManager {
 
     public boolean isTrackedMob(Entity entity) {
         return trackedMobs.containsKey(entity.getUniqueId());
+    }
+
+    public String getTrackedMobTemplateId(Entity entity) {
+        return trackedMobs.get(entity.getUniqueId());
     }
 
     public void untrackMob(Entity entity) {

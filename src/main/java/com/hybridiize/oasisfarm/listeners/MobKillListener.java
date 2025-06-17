@@ -30,39 +30,33 @@ public class MobKillListener implements Listener {
     @EventHandler
     public void onEntityDeath(EntityDeathEvent event) {
         LivingEntity killedMob = event.getEntity();
-        Player killer = killedMob.getKiller(); // This is null if it wasn't killed by a player
+        Player killer = killedMob.getKiller();
 
-        // --- Step 1: Basic Checks ---
-        // Was it killed by a player? Is the mob one of ours?
         if (killer == null || !plugin.getFarmManager().isTrackedMob(killedMob)) {
             return;
         }
 
-        // --- Step 2: Identify the Mob and its Farm ---
-        // We need to find the specific MobInfo that corresponds to the mob that was just killed.
-        // This is a bit complex, but necessary to get the right rewards and cooldowns.
-        Farm farm = null;
-        MobInfo mobInfo = null;
+        // --- NEW: Identify the Mob Template ---
+        String templateId = plugin.getFarmManager().getTrackedMobTemplateId(killedMob);
+        if (templateId == null) return;
 
-        for (Farm currentFarm : plugin.getConfigManager().getFarms().values()) {
-            for (MobInfo currentMobInfo : currentFarm.getMobInfoList()) {
-                if (currentMobInfo.getType() == killedMob.getType()) {
-                    // This logic assumes mob types are unique per farm for now.
-                    // We can refine this later if needed.
-                    farm = currentFarm;
-                    mobInfo = currentMobInfo;
-                    break;
-                }
-            }
-            if (farm != null) break;
+        MobInfo mobInfo = plugin.getConfigManager().getMobTemplate(templateId);
+        if (mobInfo == null) {
+            // This should not happen if the mob was tracked, but it's a good safety check.
+            plugin.getFarmManager().untrackMob(killedMob);
+            return;
         }
 
-        if (farm == null || mobInfo == null) {
-            return; // Couldn't find matching farm/mob info, something is wrong.
+        // --- Permission Check ---
+        if (mobInfo.getKillPermission() != null && !killer.hasPermission(mobInfo.getKillPermission())) {
+            killer.sendMessage(ChatColor.RED + "You do not have permission to get rewards for killing this mob.");
+            plugin.getFarmManager().untrackMob(killedMob);
+            return;
         }
 
-        // --- Step 3: Cooldown Check ---
-        String mobIdentifier = mobInfo.getType().name(); // e.g., "ZOMBIE"
+        // --- Cooldown Check ---
+        // IMPORTANT: We now use the templateId for the cooldown key
+        String mobIdentifier = mobInfo.getTemplateId();
         long currentTime = System.currentTimeMillis();
         long cooldownEnd = cooldowns.computeIfAbsent(killer.getUniqueId(), k -> new HashMap<>())
                 .getOrDefault(mobIdentifier, 0L);
@@ -73,20 +67,24 @@ public class MobKillListener implements Listener {
             return;
         }
 
-        // --- Step 4: Execute Reward Commands ---
+        // --- Broadcast Logic ---
+        if (mobInfo.getBroadcastKill() != null && !mobInfo.getBroadcastKill().isEmpty()) {
+            String broadcastMessage = PlaceholderAPI.setPlaceholders(killer, mobInfo.getBroadcastKill());
+            Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', broadcastMessage));
+        }
+
+        // --- Execute Reward Commands ---
         for (String command : mobInfo.getRewards()) {
-            // Replace placeholders using PlaceholderAPI
             String parsedCommand = PlaceholderAPI.setPlaceholders(killer, command);
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsedCommand);
         }
 
-        // --- Step 5: Set New Cooldown & Untrack Mob ---
+        // --- Set New Cooldown ---
         if (mobInfo.getKillCooldown() > 0) {
             long newCooldownEnd = currentTime + (mobInfo.getKillCooldown() * 1000L);
             cooldowns.get(killer.getUniqueId()).put(mobIdentifier, newCooldownEnd);
         }
 
-        // The mob is dead, so we remove it from our tracking system.
         plugin.getFarmManager().untrackMob(killedMob);
     }
 }

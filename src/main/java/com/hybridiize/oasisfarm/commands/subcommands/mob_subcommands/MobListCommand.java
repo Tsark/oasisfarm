@@ -5,6 +5,8 @@ import com.hybridiize.oasisfarm.farm.MobInfo;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
+import java.util.Map;
+
 public class MobListCommand extends MobSubCommand {
     @Override
     public String getName() { return "list"; }
@@ -28,14 +30,16 @@ public class MobListCommand extends MobSubCommand {
         }
 
         player.sendMessage(ChatColor.GOLD + "--- Mobs for " + farm.getId() + " ---");
-        if (farm.getMobInfoList().isEmpty()) {
+        if (farm.getMobs().isEmpty()) {
             player.sendMessage(ChatColor.YELLOW + "This farm has no mobs configured.");
             return;
         }
 
-        for (MobInfo mobInfo : farm.getMobInfoList()) {
-            player.sendMessage(ChatColor.AQUA + mobInfo.getType().name() + ": " +
-                    ChatColor.WHITE + (mobInfo.getSpawnChance() * 100) + "%");
+        for (Map.Entry<String, Double> entry : farm.getMobs().entrySet()) {
+            player.sendMessage(ChatColor.AQUA + entry.getKey() + ": " +
+                    ChatColor.WHITE + (entry.getValue() * 100) + "%");
         }
+
     }
+
 }

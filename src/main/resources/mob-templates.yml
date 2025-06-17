@@ -1,0 +1,21 @@
+# OasisFarm Mob Templates
+# Define all your custom mobs here. Farms will refer to them by their ID (e.g., "starter_zombie").
+
+starter_zombie:
+  type: ZOMBIE
+  display-name: "&cStarter Zombie"
+  health: 15.0
+  equipment:
+    HAND: "WOODEN_SWORD"
+  rewards:
+    - "msg %player_name% &aYou killed a zombie and earned $10!"
+    - "eco give %player_name% 10"
+
+starter_skeleton:
+  type: SKELETON
+  kill-cooldown: 5
+  kill-permission: "oasisfarm.kill.skeleton_knight"
+  broadcast-kill: "&6[!] &e%player_name% &7has defeated a &cSkeleton Knight&7!"
+  rewards:
+    - "msg %player_name% &eYou killed a skeleton! Here is $25!"
+    - "eco give %player_name% 25"

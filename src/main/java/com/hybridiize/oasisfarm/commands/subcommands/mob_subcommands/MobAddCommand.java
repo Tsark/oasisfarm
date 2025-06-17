@@ -21,13 +21,12 @@ public class MobAddCommand extends MobSubCommand {
         }
 
         String farmId = args[2];
-        String mobTypeStr = args[3].toUpperCase();
+        String templateId = args[3]; // We now use a template ID
         double chance;
 
-        try {
-            EntityType.valueOf(mobTypeStr);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage(ChatColor.RED + "Invalid mob type: " + mobTypeStr);
+        // NEW: Check if the template exists
+        if (plugin.getConfigManager().getMobTemplate(templateId) == null) {
+            player.sendMessage(ChatColor.RED + "The mob template '" + templateId + "' does not exist in mob-templates.yml.");
             return;
         }
 
@@ -50,13 +49,13 @@ public class MobAddCommand extends MobSubCommand {
             return;
         }
 
-        String mobPath = farmPath + ".mobs." + mobTypeStr;
-        config.set(mobPath + ".spawn-chance", chance);
-        // You can add default values for other properties here if you want
-        config.set(mobPath + ".rewards", new String[]{"msg %player_name% You killed a " + mobTypeStr});
+        // New, simpler config setting
+        String mobPath = farmPath + ".mobs." + templateId;
+        config.set(mobPath, chance);
 
         plugin.saveConfig();
-        plugin.getConfigManager().loadFarms();
-        player.sendMessage(ChatColor.GREEN + "Added " + mobTypeStr + " to farm " + farmId + " with a " + (chance * 100) + "% chance.");
+        plugin.getConfigManager().loadAllConfigs(); // Use the new all-encompassing loader
+        player.sendMessage(ChatColor.GREEN + "Added " + templateId + " to farm " + farmId + " with a " + (chance * 100) + "% chance.");
+// ...
     }
 }

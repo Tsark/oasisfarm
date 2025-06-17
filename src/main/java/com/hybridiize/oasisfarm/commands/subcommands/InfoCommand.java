@@ -36,6 +36,6 @@ public class InfoCommand extends SubCommand {
         player.sendMessage(ChatColor.AQUA + "Max Mobs: " + ChatColor.WHITE + farm.getMaxMobs());
         player.sendMessage(ChatColor.AQUA + "Position 1: " + ChatColor.WHITE + p1.getBlockX() + ", " + p1.getBlockY() + ", " + p1.getBlockZ());
         player.sendMessage(ChatColor.AQUA + "Position 2: " + ChatColor.WHITE + p2.getBlockX() + ", " + p2.getBlockY() + ", " + p2.getBlockZ());
-        player.sendMessage(ChatColor.AQUA + "Mob Types: " + ChatColor.WHITE + farm.getMobInfoList().size());
+        player.sendMessage(ChatColor.AQUA + "Mob Types: " + ChatColor.WHITE + farm.getMobs().size());
     }
 }

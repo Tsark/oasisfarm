@@ -12,18 +12,17 @@ public class MobSetNameCommand extends MobSubCommand {
     @Override
     public String getDescription() { return "Sets the display name of a mob type."; }
     @Override
-    public String getSyntax() { return "/of mob setname <farm> <mob> <name...>"; }
+    public String getSyntax() { return "/of mob setname <template_id> <name...>"; }
 
     @Override
     public void perform(Player player, String[] args) {
-        if (args.length < 5) {
+        if (args.length < 4) {
             player.sendMessage(ChatColor.RED + "Usage: " + getSyntax());
             return;
         }
 
-        String farmId = args[2];
-        String mobType = args[3].toUpperCase();
-        String name = Arrays.stream(args).skip(4).collect(Collectors.joining(" "));
+        String templateId = args[2]; // No farm needed now
+        String name = Arrays.stream(args).skip(3).collect(Collectors.joining(" "));
 
         FileConfiguration config = plugin.getConfig();
         String path = "farms." + farmId + ".mobs." + mobType;

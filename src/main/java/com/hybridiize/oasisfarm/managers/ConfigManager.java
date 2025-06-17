@@ -9,90 +9,126 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.EntityType;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.File;
+import java.util.*;
 import java.util.logging.Level;
 
 public class ConfigManager {
 
     private final Oasisfarm plugin;
     private final Map<String, Farm> farms = new HashMap<>();
+    private final Map<String, MobInfo> mobTemplates = new HashMap<>(); // New map for templates
+
+    // New fields for the templates file
+    private File mobTemplatesFile;
+    private FileConfiguration mobTemplatesConfig;
 
     public ConfigManager(Oasisfarm plugin) {
         this.plugin = plugin;
+        setupTemplateFile();
     }
 
-    public void loadFarms() {
-        farms.clear(); // Clear any old farm data before loading new data
-        plugin.reloadConfig(); // Make sure we have the latest version of the config
+    private void setupTemplateFile() {
+        mobTemplatesFile = new File(plugin.getDataFolder(), "mob-templates.yml");
+        if (!mobTemplatesFile.exists()) {
+            plugin.saveResource("mob-templates.yml", false);
+        }
+        mobTemplatesConfig = YamlConfiguration.loadConfiguration(mobTemplatesFile);
+    }
+
+    public void loadAllConfigs() {
+        loadMobTemplates();
+        loadFarms();
+    }
+
+    private void loadMobTemplates() {
+        mobTemplates.clear();
+        mobTemplatesConfig = YamlConfiguration.loadConfiguration(mobTemplatesFile); // Reload from disk
+
+        for (String templateId : mobTemplatesConfig.getKeys(false)) {
+            try {
+                ConfigurationSection section = mobTemplatesConfig.getConfigurationSection(templateId);
+                EntityType type = EntityType.valueOf(section.getString("type").toUpperCase());
+                int killCooldown = section.getInt("kill-cooldown", -1);
+                String displayName = section.getString("display-name");
+                if (displayName != null) {
+                    displayName = ChatColor.translateAlternateColorCodes('&', displayName);
+                }
+                double health = section.getDouble("health", -1);
+                List<String> rewards = section.getStringList("rewards");
+                String killPermission = section.getString("kill-permission");
+                String broadcastKill = section.getString("broadcast-kill");
+
+                Map<String, String> equipment = new HashMap<>();
+                ConfigurationSection equipSection = section.getConfigurationSection("equipment");
+                if (equipSection != null) {
+                    for(String slot : equipSection.getKeys(false)) {
+                        equipment.put(slot.toUpperCase(), equipSection.getString(slot));
+                    }
+                }
+
+                MobInfo mobInfo = new MobInfo(templateId, type, killCooldown, displayName, health, equipment, rewards, killPermission, broadcastKill);
+                mobTemplates.put(templateId, mobInfo);
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to load mob template '" + templateId + "'. Reason: " + e.getMessage());
+            }
+        }
+        plugin.getLogger().info("Successfully loaded " + mobTemplates.size() + " mob template(s).");
+    }
+
+    private void loadFarms() {
+        farms.clear();
+        plugin.reloadConfig();
         ConfigurationSection farmsSection = plugin.getConfig().getConfigurationSection("farms");
 
         if (farmsSection == null) {
-            plugin.getLogger().warning("No 'farms' section found in config.yml. No farms will be loaded.");
+            plugin.getLogger().warning("No 'farms' section found in config.yml.");
             return;
         }
 
         for (String farmId : farmsSection.getKeys(false)) {
-            String farmPath = "farms." + farmId;
             try {
-                // --- Parse Region ---
-                String worldName = farmsSection.getString(farmId + ".region.world");
+                ConfigurationSection farmSection = farmsSection.getConfigurationSection(farmId);
+                String worldName = farmSection.getString("region.world");
                 World world = Bukkit.getWorld(worldName);
-                if (world == null) {
-                    throw new IllegalArgumentException("World '" + worldName + "' not found!");
-                }
-                Location pos1 = parseLocationString(world, farmsSection.getString(farmId + ".region.pos1"));
-                Location pos2 = parseLocationString(world, farmsSection.getString(farmId + ".region.pos2"));
+                if (world == null) throw new IllegalArgumentException("World '" + worldName + "' not found!");
+
+                Location pos1 = parseLocationString(world, farmSection.getString("region.pos1"));
+                Location pos2 = parseLocationString(world, farmSection.getString("region.pos2"));
                 Region region = new Region(pos1, pos2);
 
-                // --- Parse Basic Farm Info ---
-                int maxMobs = farmsSection.getInt(farmId + ".max-mobs");
+                int maxMobs = farmSection.getInt("max-mobs");
+                int entryCooldown = farmSection.getInt("entry-cooldown", 0);
 
-                // --- Parse Mob List ---
-                List<MobInfo> mobInfoList = new ArrayList<>();
-                ConfigurationSection mobsSection = farmsSection.getConfigurationSection(farmId + ".mobs");
+                // New way of loading mobs
+                Map<String, Double> mobs = new HashMap<>();
+                ConfigurationSection mobsSection = farmSection.getConfigurationSection("mobs");
                 if (mobsSection != null) {
-                    for (String mobTypeName : mobsSection.getKeys(false)) {
-                        String mobPath = farmId + ".mobs." + mobTypeName;
-                        EntityType entityType = EntityType.valueOf(mobTypeName.toUpperCase());
-                        double spawnChance = mobsSection.getDouble(mobTypeName + ".spawn-chance");
-                        int killCooldown = mobsSection.getInt(mobTypeName + ".kill-cooldown", -1);
-                        String displayName = mobsSection.getString(mobTypeName + ".display-name");
-                        if (displayName != null) {
-                            displayName = ChatColor.translateAlternateColorCodes('&', displayName);
+                    for (String templateId : mobsSection.getKeys(false)) {
+                        if (!mobTemplates.containsKey(templateId)) {
+                            plugin.getLogger().warning("Farm '" + farmId + "' uses unknown mob template '" + templateId + "'. Skipping.");
+                            continue;
                         }
-                        double health = mobsSection.getDouble(mobTypeName + ".health", -1); // -1 means use default
-                        List<String> rewards = mobsSection.getStringList(mobTypeName + ".rewards");
-
-                        // Parse Equipment
-                        Map<String, String> equipment = new HashMap<>();
-                        ConfigurationSection equipSection = mobsSection.getConfigurationSection(mobTypeName + ".equipment");
-                        if (equipSection != null) {
-                            for(String slot : equipSection.getKeys(false)) {
-                                equipment.put(slot.toUpperCase(), equipSection.getString(slot));
-                            }
-                        }
-
-                        mobInfoList.add(new MobInfo(entityType, spawnChance, killCooldown, displayName, health, equipment, rewards));
+                        mobs.put(templateId, mobsSection.getDouble(templateId));
                     }
                 }
 
-                Farm farm = new Farm(farmId, region, maxMobs, mobInfoList);
+                Farm farm = new Farm(farmId, region, maxMobs, entryCooldown, mobs);
                 farms.put(farmId, farm);
 
             } catch (Exception e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to load farm '" + farmId + "'. Reason: " + e.getMessage());
+                plugin.getLogger().log(Level.SEVERE, "Failed to load farm '" + farmId + "'. Reason: " + e.getMessage(), e);
             }
         }
         plugin.getLogger().info("Successfully loaded " + farms.size() + " farm(s).");
     }
 
     private Location parseLocationString(World world, String str) {
+        // ... (this method is unchanged)
         if (str == null) throw new IllegalArgumentException("Coordinate string is null");
         String[] parts = str.split(",");
         if (parts.length != 3) throw new IllegalArgumentException("Invalid coordinate format: " + str);
@@ -102,7 +138,7 @@ public class ConfigManager {
         return new Location(world, x, y, z);
     }
 
-    public Map<String, Farm> getFarms() {
-        return Collections.unmodifiableMap(farms);
-    }
+    // --- NEW/UPDATED GETTERS ---
+    public Map<String, Farm> getFarms() { return Collections.unmodifiableMap(farms); }
+    public MobInfo getMobTemplate(String templateId) { return mobTemplates.get(templateId); }
 }

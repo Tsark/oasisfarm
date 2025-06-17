@@ -10,7 +10,7 @@ public class MobRemoveCommand extends MobSubCommand {
     @Override
     public String getDescription() { return "Removes a mob type from a farm."; }
     @Override
-    public String getSyntax() { return "/of mob remove <farm_name> <mob_type>"; }
+    public String getSyntax() { return "/of mob remove <template_id> <name...>"; }
 
     @Override
     public void perform(Player player, String[] args) {
@@ -19,8 +19,8 @@ public class MobRemoveCommand extends MobSubCommand {
             return;
         }
 
-        String farmId = args[2];
-        String mobTypeStr = args[3].toUpperCase();
+        String templateId = args[2]; // No farm needed now
+        String name = Arrays.stream(args).skip(3).collect(Collectors.joining(" "));
         FileConfiguration config = plugin.getConfig();
         String mobPath = "farms." + farmId + ".mobs." + mobTypeStr;
 

@@ -47,7 +47,7 @@ public class CreateCommand extends SubCommand {
         config.set(path + ".region.pos1", pos1.getBlockX() + "," + pos1.getBlockY() + "," + pos1.getBlockZ());
         config.set(path + ".region.pos2", pos2.getBlockX() + "," + pos2.getBlockY() + "," + pos2.getBlockZ());
         config.set(path + ".max-mobs", 10);
-        config.set(path + ".mobs.ZOMBIE.spawn-chance", 1.0);
+        config.set(path + ".mobs.starter_zombie", 1.0);
 
         plugin.saveConfig();
         plugin.getConfigManager().loadFarms();
