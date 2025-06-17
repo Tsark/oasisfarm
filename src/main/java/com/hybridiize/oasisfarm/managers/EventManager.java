@@ -1,6 +1,7 @@
 package com.hybridiize.oasisfarm.managers;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
+import com.hybridiize.oasisfarm.event.ActiveEventTracker;
 import com.hybridiize.oasisfarm.event.EventCondition;
 import com.hybridiize.oasisfarm.event.EventPhase;
 import com.hybridiize.oasisfarm.event.OasisEvent;
@@ -8,6 +9,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
+import org.bukkit.entity.Player;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,11 +24,13 @@ public class EventManager {
     private final Oasisfarm plugin;
     private final Map<String, Long> eventCooldowns = new ConcurrentHashMap<>();
     private final Map<String, String> activeFarmEvents = new ConcurrentHashMap<>();
-    private final Map<String, OasisEvent> runningEventInstances = new ConcurrentHashMap<>();
+    private final Map<String, ActiveEventTracker> runningEventInstances = new ConcurrentHashMap<>();
+    private final Map<String, BossBar> eventBossBars = new ConcurrentHashMap<>();
 
     public EventManager(Oasisfarm plugin) {
         this.plugin = plugin;
         startEventTicker();
+        startPhaseTicker();
     }
 
     private void startEventTicker() {
@@ -56,6 +63,97 @@ public class EventManager {
                 // In the future, this is where we will start the event.
                 startEvent(event);
                 break;
+            }
+        }
+    }
+
+    private void startPhaseTicker() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                // Use a copy to avoid issues while iterating and removing
+                for (ActiveEventTracker tracker : new java.util.ArrayList<>(runningEventInstances.values())) {
+                    if (tracker.isPhaseOver()) {
+                        advanceEventPhase(tracker);
+                    }
+                }
+                updateBossBars();
+            }
+        }.runTaskTimer(plugin, 20L, 20L); // Run every second
+    }
+
+    private void advanceEventPhase(ActiveEventTracker tracker) {
+        // This moves the tracker to the next phase index and returns the new phase object
+        EventPhase nextPhase = tracker.advanceToNextPhase();
+
+        // Check if the event is over (no more phases)
+        if (nextPhase == null) {
+            endEvent(tracker.getEvent().getId());
+            return;
+        }
+
+        // --- BOSS BAR LOGIC ---
+        // Get the Boss Bar associated with this event
+        BossBar bar = eventBossBars.get(tracker.getEvent().getId());
+        if (bar == null) {
+            // If this is the first phase, the bar won't exist yet, so we create it.
+            bar = Bukkit.createBossBar("Event Starting...", BarColor.RED, BarStyle.SOLID);
+            bar.setVisible(true);
+            eventBossBars.put(tracker.getEvent().getId(), bar);
+        }
+
+        // Update the list of players who can see the bar.
+        // We do this every phase in case players have logged on or off.
+        bar.removeAll(); // Clear old players
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            bar.addPlayer(p);
+        }
+        // --- END OF BOSS BAR LOGIC ---
+
+        // Run on-start commands for the new phase
+        if (nextPhase.getOnStartCommands() != null) {
+            for (String command : nextPhase.getOnStartCommands()) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), ChatColor.translateAlternateColorCodes('&', command));
+            }
+        }
+    }
+
+    public void endEvent(String eventId) {
+        OasisEvent event = runningEventInstances.get(eventId).getEvent();
+        if (event == null) return;
+
+        plugin.getLogger().info("Ending event: " + event.getId());
+
+        // Remove the event from the active lists
+        runningEventInstances.remove(eventId);
+        activeFarmEvents.values().removeIf(id -> id.equals(eventId));
+
+        // Put the event on cooldown
+        long cooldownMillis = event.getCooldown() * 1000L;
+        eventCooldowns.put(eventId, System.currentTimeMillis() + cooldownMillis);
+
+        BossBar bar = eventBossBars.remove(eventId);
+        if (bar != null) {
+            bar.setVisible(false);
+            bar.removeAll();
+        }
+        // We could add on-end commands here in the future
+    }
+
+    private void updateBossBars() {
+        for (ActiveEventTracker tracker : runningEventInstances.values()) {
+            BossBar bar = eventBossBars.get(tracker.getEvent().getId());
+            EventPhase phase = tracker.getCurrentPhase();
+            if (bar != null && phase != null) {
+                long timeLeft = tracker.getPhaseEndTime() - System.currentTimeMillis();
+                double progress = Math.max(0, (double) timeLeft / (phase.getDuration() * 1000.0));
+                bar.setProgress(progress);
+
+                String title = String.format("&c&l%s &7- &ePhase %d &7- &fTime Left: %ds",
+                        tracker.getEvent().getId().replace("_", " "),
+                        tracker.getCurrentPhaseIndex() + 1,
+                        timeLeft / 1000);
+                bar.setTitle(ChatColor.translateAlternateColorCodes('&', title));
             }
         }
     }
@@ -110,11 +208,13 @@ public class EventManager {
     }
 
     public void startEvent(OasisEvent event) {
-        // Prevent starting an event that's somehow already running
         if (runningEventInstances.containsKey(event.getId())) return;
 
         plugin.getLogger().info("Starting event: " + event.getId());
-        runningEventInstances.put(event.getId(), event);
+
+        // Create the tracker for the new event
+        ActiveEventTracker tracker = new ActiveEventTracker(event);
+        runningEventInstances.put(event.getId(), tracker);
 
         // Assign the event to its target farm(s)
         if (event.getTargetFarm().equalsIgnoreCase("all")) {
@@ -125,21 +225,8 @@ public class EventManager {
             activeFarmEvents.put(event.getTargetFarm(), event.getId());
         }
 
-        // For now, we'll just handle the first phase's on-start commands.
-        // In the next step, we'll build the full phase-transition logic.
-        if (!event.getPhases().isEmpty()) {
-            EventPhase firstPhase = event.getPhases().get(0);
-            if (firstPhase.getOnStartCommands() != null) {
-                for (String command : firstPhase.getOnStartCommands()) {
-                    // We can use PAPI here too if we want, but for now, we'll keep it simple
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), ChatColor.translateAlternateColorCodes('&', command));
-                }
-            }
-        }
-
-        // Put the event on cooldown
-        long cooldownMillis = event.getCooldown() * 1000L;
-        eventCooldowns.put(event.getId(), System.currentTimeMillis() + cooldownMillis);
+        // Advance to the first phase immediately
+        advanceEventPhase(tracker);
     }
 
     public boolean isEventActive(String farmId) {
@@ -150,10 +237,23 @@ public class EventManager {
         String eventId = activeFarmEvents.get(farmId);
         if (eventId == null) return null;
 
-        OasisEvent event = runningEventInstances.get(eventId);
-        if (event == null || event.getPhases().isEmpty()) return null;
+        ActiveEventTracker tracker = runningEventInstances.get(eventId);
+        if (tracker == null) return null;
 
-        // For now, we only have one phase. We will expand this in the next step.
-        return event.getPhases().get(0);
+        return tracker.getCurrentPhase();
     }
+
+    public boolean isEventRunning(String eventId) {
+        return runningEventInstances.containsKey(eventId);
+    }
+
+    public Map<String, String> getRunningEventFarmMap() {
+        return activeFarmEvents;
+    }
+
+    public Map<String, Long> getEventCooldowns() {
+        return eventCooldowns;
+    }
+
+
 }

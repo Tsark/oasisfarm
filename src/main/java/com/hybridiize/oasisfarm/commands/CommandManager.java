@@ -8,6 +8,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import com.hybridiize.oasisfarm.commands.subcommands.EventCommand;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +30,7 @@ public class CommandManager implements CommandExecutor {
         subCommands.add(new DeleteCommand());
         subCommands.add(new InfoCommand());
         subCommands.add(new TeleportCommand());
+        subCommands.add(new EventCommand());
         subCommands.add(new ReloadCommand());
     }
 
