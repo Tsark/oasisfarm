@@ -7,8 +7,8 @@ public class Farm {
     private final Region region;
     private final int maxMobs;
     private final int entryCooldown;
-    // This is the major change: Map<TemplateID, SpawnChance>
     private final Map<String, Double> mobs;
+    private long lastSpawnTick = 0;
 
     public Farm(String id, Region region, int maxMobs, int entryCooldown, Map<String, Double> mobs) {
         this.id = id;
@@ -24,4 +24,6 @@ public class Farm {
     public int getMaxMobs() { return maxMobs; }
     public int getEntryCooldown() { return entryCooldown; }
     public Map<String, Double> getMobs() { return mobs; }
+    public long getLastSpawnTick() { return lastSpawnTick; }
+    public void setLastSpawnTick(long lastSpawnTick) { this.lastSpawnTick = lastSpawnTick; }
 }

@@ -9,6 +9,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 public final class Oasisfarm extends JavaPlugin {
@@ -18,7 +20,8 @@ public final class Oasisfarm extends JavaPlugin {
     private SelectionManager selectionManager;
     private FarmManager farmManager;
     private HologramManager hologramManager;
-    private PendingConfirmationManager confirmationManager; // <-- ADD THIS VARIABLE
+    private PendingConfirmationManager confirmationManager;
+    private EventManager eventManager;
 
     @Override
     public void onEnable() {
@@ -31,7 +34,8 @@ public final class Oasisfarm extends JavaPlugin {
         this.selectionManager = new SelectionManager();
         this.farmManager = new FarmManager(this);
         this.hologramManager = new HologramManager(this);
-        this.confirmationManager = new PendingConfirmationManager(); // <-- INITIALIZE IT
+        this.confirmationManager = new PendingConfirmationManager();
+        this.eventManager = new EventManager(this);
 
         // Load data from config
         this.configManager.loadAllConfigs();
@@ -55,8 +59,10 @@ public final class Oasisfarm extends JavaPlugin {
 
         if (farmManager != null) {
             getLogger().info("Removing all tracked OasisFarm mobs...");
+            // We get the set of UUIDs directly from the keySet now
+            Set<UUID> mobIds = new HashSet<>(farmManager.getTrackedMobIds()); // Use a copy to avoid concurrent modification issues
             int removedCount = 0;
-            for (UUID mobId : farmManager.getAllTrackedMobIds()) {
+            for (UUID mobId : mobIds) {
                 Entity mob = Bukkit.getEntity(mobId);
                 if (mob != null) {
                     mob.remove();
@@ -82,4 +88,5 @@ public final class Oasisfarm extends JavaPlugin {
     public HologramManager getHologramManager() {
         return hologramManager;
     }
+    public EventManager getEventManager() { return eventManager; }
 }

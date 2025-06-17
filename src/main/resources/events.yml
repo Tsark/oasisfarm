@@ -1,0 +1,50 @@
+# OasisFarm Event Configuration
+
+# Check for possible events every 60 seconds (1200 ticks)
+event-check-interval: 1200
+
+events:
+  blood_moon:
+    # The farm this event can happen in. Can be "all" or a specific farm_id.
+    target-farm: "starter_zone"
+    # Cooldown in seconds after the event ends before it can be triggered again.
+    cooldown: 3600 # 1 hour
+
+    # --- CONDITIONS (ALL must be met to trigger) ---
+    conditions:
+      MIN_PLAYERS: 1
+      TIME_OF_DAY: "NIGHT"
+      # PAPI_CHECK: # Example of a PlaceholderAPI check
+      #  placeholder: "%server_total_money%"
+      #  match-type: "GREATER_THAN"
+      #  value: "1000000"
+
+    # --- PHASES (run in order) ---
+    phases:
+      # Phase 1: The Warning
+      - duration: 300 # 5 minutes
+        on-start-commands:
+          - "broadcast &cThe moon turns red! The undead grow restless..."
+        farm-overrides:
+          spawn-interval-modifier: 0.5 # Mobs spawn twice as fast
+        mob-overrides:
+          # Add new mobs to the spawn list just for this phase, with their chances
+          add-mobs:
+            starter_skeleton: 0.20 # Increase skeleton chance
+          # Modify the rewards for a mob during this phase
+          modify-rewards:
+            starter_zombie:
+              - "eco give %player_name% 20" # Double rewards
+              - "msg %player_name% &aYou killed a supercharged zombie!"
+
+      # Phase 2: The Boss
+      - duration: 600 # 10 minutes
+        on-start-commands:
+          - "broadcast &4&lA powerful entity has been drawn by the blood moon!"
+        farm-overrides:
+          clear-existing-mobs: true # Despawn all normal farm mobs
+          max-mobs: 1 # Only allow one mob in the farm
+        mob-overrides:
+          # Force the spawn list to be ONLY this mob
+          set-mobs:
+            undead_king: 1.0 # Requires an 'undead_king' template in mob-templates.yml

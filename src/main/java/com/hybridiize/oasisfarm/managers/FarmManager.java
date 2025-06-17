@@ -1,9 +1,11 @@
 package com.hybridiize.oasisfarm.managers;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
+import com.hybridiize.oasisfarm.event.EventPhase;
 import com.hybridiize.oasisfarm.farm.Farm;
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.Region;
+import com.hybridiize.oasisfarm.farm.TrackedMob;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material; // new
@@ -17,12 +19,13 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.Objects;
 
 public class FarmManager {
 
     private final Oasisfarm plugin;
     // This map tracks which mobs belong to which farm. This is our Optimized Mob Tracking.
-    private final Map<UUID, String> trackedMobs = new HashMap<>();
+    private final Map<UUID, TrackedMob> trackedMobs = new HashMap<>();
 
     public FarmManager(Oasisfarm plugin) {
         this.plugin = plugin;
@@ -30,68 +33,103 @@ public class FarmManager {
     }
 
     private void startFarmTicker() {
-        long interval = plugin.getConfig().getLong("farm-check-interval", 100L); // Default to 5 seconds (100 ticks)
-
+        // We no longer store the interval as a final variable, as it can change.
         new BukkitRunnable() {
             @Override
             public void run() {
-                // Get all farms from the ConfigManager
                 Map<String, Farm> farms = plugin.getConfigManager().getFarms();
                 for (Farm farm : farms.values()) {
                     processFarm(farm);
                 }
             }
-        }.runTaskTimer(plugin, 0L, interval);
+        }.runTaskTimer(plugin, 0L, 20L); // Check every second (20 ticks) for responsiveness
     }
 
     private void processFarm(Farm farm) {
+        // --- EVENT OVERRIDE LOGIC ---
+        EventManager eventManager = plugin.getEventManager();
+        EventPhase currentPhase = eventManager.isEventActive(farm.getId()) ? eventManager.getCurrentPhase(farm.getId()) : null;
+
+        double spawnIntervalModifier = 1.0;
+        int maxMobs = farm.getMaxMobs();
+
+        if (currentPhase != null) {
+            spawnIntervalModifier = currentPhase.getSpawnIntervalModifier();
+            if (currentPhase.getMaxMobsOverride() > -1) {
+                maxMobs = currentPhase.getMaxMobsOverride();
+            }
+        }
+
+        // Use the default interval from config, modified by the event
+        long baseInterval = plugin.getConfig().getLong("farm-check-interval", 100L);
+        long effectiveInterval = (long) (baseInterval * spawnIntervalModifier);
+
+        // Check if enough time has passed to spawn for this farm
+        if (System.currentTimeMillis() - farm.getLastSpawnTick() < effectiveInterval * 50) { // 50 is ms per tick
+            return;
+        }
+        farm.setLastSpawnTick(System.currentTimeMillis());
+
         Region region = farm.getRegion();
         World world = region.getPos1().getWorld();
 
         // --- Chunk Awareness ---
-        // Check if the farm's region is loaded by checking if the corner chunks are loaded.
-        // This is a simple but effective way to save performance.
         if (!world.isChunkLoaded(region.getPos1().getBlockX() >> 4, region.getPos1().getBlockZ() >> 4) &&
                 !world.isChunkLoaded(region.getPos2().getBlockX() >> 4, region.getPos2().getBlockZ() >> 4)) {
             return; // Skip this farm if no players are nearby
         }
 
-        // --- Mob Counting ---
-        // We first clean up our list of any dead or removed mobs.
-        trackedMobs.keySet().removeIf(uuid -> {
-            Entity entity = Bukkit.getEntity(uuid);
-            return entity == null || entity.isDead();
-        });
-
         // --- Mob Confinement ---
-        // Check if any tracked mobs have wandered outside their designated farm.
-        for (Map.Entry<UUID, String> entry : new HashMap<>(trackedMobs).entrySet()) {
-            if (entry.getValue().equals(farm.getId())) { // Check only mobs belonging to the current farm
+        for (Map.Entry<UUID, TrackedMob> entry : new HashMap<>(trackedMobs).entrySet()) {
+            if (entry.getValue().getFarmId().equals(farm.getId())) {
                 Entity entity = Bukkit.getEntity(entry.getKey());
                 if (entity != null && !farm.getRegion().contains(entity.getLocation())) {
-                    // Mob has escaped! Teleport it back to a random spot in the region.
                     entity.teleport(getRandomLocationInRegion(farm.getRegion()));
                 }
             }
         }
 
-        // Now, count how many of our tracked mobs are currently in this farm.
-        long currentMobCount = trackedMobs.values().stream().filter(farmId -> farmId.equals(farm.getId())).count();
+        // --- Mob Counting ---
+        trackedMobs.keySet().removeIf(uuid -> Bukkit.getEntity(uuid) == null || Bukkit.getEntity(uuid).isDead());
+
+        long currentMobCount = trackedMobs.values().stream()
+                .filter(trackedMob -> trackedMob.getFarmId().equals(farm.getId()))
+                .count();
+
+        // Update hologram
         plugin.getHologramManager().createOrUpdateFarmHologram(farm, (int) currentMobCount);
-        int mobsToSpawn = farm.getMaxMobs() - (int) currentMobCount;
+
+        // Use the potentially overridden maxMobs value
+        int mobsToSpawn = maxMobs - (int) currentMobCount;
 
         if (mobsToSpawn <= 0) {
-            return; // The farm is full, nothing to do.
+            return;
         }
 
-        // --- Staggered Spawning ---
-        // We will spawn one mob per tick cycle to avoid lag spikes.
         spawnMobInFarm(farm);
     }
 
     private void spawnMobInFarm(Farm farm) {
-        // Get the map of <TemplateID, SpawnChance>
-        Map<String, Double> mobs = farm.getMobs();
+        // --- EVENT MOB OVERRIDE ---
+        Map<String, Double> mobs = farm.getMobs(); // Get the default mob list
+
+        EventManager eventManager = plugin.getEventManager();
+        EventPhase currentPhase = eventManager.isEventActive(farm.getId()) ? eventManager.getCurrentPhase(farm.getId()) : null;
+
+        if (currentPhase != null) {
+            // "set-mobs" completely replaces the mob list
+            if (currentPhase.getSetMobs() != null && !currentPhase.getSetMobs().isEmpty()) {
+                mobs = currentPhase.getSetMobs();
+            }
+            // "add-mobs" adds to the existing list
+            else if (currentPhase.getAddMobs() != null && !currentPhase.getAddMobs().isEmpty()) {
+                // Create a mutable copy to add to
+                mobs = new HashMap<>(mobs);
+                mobs.putAll(currentPhase.getAddMobs());
+            }
+        }
+
+        // The rest of the method uses the 'mobs' variable, which is now event-aware.
         if (mobs.isEmpty()) {
             return; // No mob types are defined for this farm.
         }
@@ -138,7 +176,7 @@ public class FarmManager {
 
                         LivingEntity spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, finalMobToSpawnInfo.getType());
                         // IMPORTANT: We now track mobs by their TEMPLATE ID.
-                        trackedMobs.put(spawnedMob.getUniqueId(), finalMobToSpawnInfo.getTemplateId());
+                        trackedMobs.put(spawnedMob.getUniqueId(), new TrackedMob(farm.getId(), finalMobToSpawnInfo.getTemplateId()));
                         applyMobAttributes(spawnedMob, finalMobToSpawnInfo);
 
                         return;
@@ -253,7 +291,7 @@ public class FarmManager {
         return trackedMobs.containsKey(entity.getUniqueId());
     }
 
-    public String getTrackedMobTemplateId(Entity entity) {
+    public TrackedMob getTrackedMob(Entity entity) {
         return trackedMobs.get(entity.getUniqueId());
     }
 
@@ -263,5 +301,9 @@ public class FarmManager {
 
     public Collection<UUID> getAllTrackedMobIds() {
         return new ArrayList<>(trackedMobs.keySet());
+    }
+
+    public Set<UUID> getTrackedMobIds() {
+        return trackedMobs.keySet();
     }
 }

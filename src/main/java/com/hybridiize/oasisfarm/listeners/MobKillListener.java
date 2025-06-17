@@ -1,8 +1,10 @@
 package com.hybridiize.oasisfarm.listeners;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
+import com.hybridiize.oasisfarm.event.EventPhase;
 import com.hybridiize.oasisfarm.farm.Farm;
 import com.hybridiize.oasisfarm.farm.MobInfo;
+import com.hybridiize.oasisfarm.managers.EventManager;
 import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -14,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -37,9 +40,10 @@ public class MobKillListener implements Listener {
         }
 
         // --- NEW: Identify the Mob Template ---
-        String templateId = plugin.getFarmManager().getTrackedMobTemplateId(killedMob);
-        if (templateId == null) return;
+        com.hybridiize.oasisfarm.farm.TrackedMob trackedMob = plugin.getFarmManager().getTrackedMob(killedMob);
+        if (trackedMob == null) return;
 
+        String templateId = trackedMob.getTemplateId();
         MobInfo mobInfo = plugin.getConfigManager().getMobTemplate(templateId);
         if (mobInfo == null) {
             // This should not happen if the mob was tracked, but it's a good safety check.
@@ -74,7 +78,17 @@ public class MobKillListener implements Listener {
         }
 
         // --- Execute Reward Commands ---
-        for (String command : mobInfo.getRewards()) {
+        List<String> rewards = mobInfo.getRewards(); // Get default rewards
+
+        // Check for event reward overrides
+        EventManager eventManager = plugin.getEventManager();
+        EventPhase currentPhase = eventManager.isEventActive(trackedMob.getFarmId()) ? eventManager.getCurrentPhase(trackedMob.getFarmId()) : null;
+
+        if (currentPhase != null && currentPhase.getModifyRewards().containsKey(templateId)) {
+            rewards = currentPhase.getModifyRewards().get(templateId);
+        }
+
+        for (String command : rewards) { // Use the potentially overridden list
             String parsedCommand = PlaceholderAPI.setPlaceholders(killer, command);
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsedCommand);
         }

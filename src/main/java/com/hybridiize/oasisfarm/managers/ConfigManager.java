@@ -1,6 +1,9 @@
 package com.hybridiize.oasisfarm.managers;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
+import com.hybridiize.oasisfarm.event.EventCondition;
+import com.hybridiize.oasisfarm.event.EventPhase;
+import com.hybridiize.oasisfarm.event.OasisEvent;
 import com.hybridiize.oasisfarm.farm.Farm;
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.Region;
@@ -22,14 +25,26 @@ public class ConfigManager {
     private final Oasisfarm plugin;
     private final Map<String, Farm> farms = new HashMap<>();
     private final Map<String, MobInfo> mobTemplates = new HashMap<>(); // New map for templates
+    private final Map<String, OasisEvent> events = new HashMap<>();
 
     // New fields for the templates file
     private File mobTemplatesFile;
     private FileConfiguration mobTemplatesConfig;
+    private File eventsFile;
+    private FileConfiguration eventsConfig;
 
     public ConfigManager(Oasisfarm plugin) {
         this.plugin = plugin;
         setupTemplateFile();
+        setupEventsFile();
+    }
+
+    private void setupEventsFile() {
+        eventsFile = new File(plugin.getDataFolder(), "events.yml");
+        if (!eventsFile.exists()) {
+            plugin.saveResource("events.yml", false);
+        }
+        eventsConfig = YamlConfiguration.loadConfiguration(eventsFile);
     }
 
     public void saveMobTemplatesConfig() {
@@ -51,6 +66,7 @@ public class ConfigManager {
     public void loadAllConfigs() {
         loadMobTemplates();
         loadFarms();
+        loadEvents();
     }
 
     public void loadMobTemplates() {
@@ -135,6 +151,95 @@ public class ConfigManager {
         plugin.getLogger().info("Successfully loaded " + farms.size() + " farm(s).");
     }
 
+    public void loadEvents() {
+        events.clear();
+        eventsConfig = YamlConfiguration.loadConfiguration(eventsFile); // Reload from disk
+        ConfigurationSection eventsSection = eventsConfig.getConfigurationSection("events");
+
+        if (eventsSection == null) return;
+
+        for (String eventId : eventsSection.getKeys(false)) {
+            try {
+                ConfigurationSection eventSection = eventsSection.getConfigurationSection(eventId);
+                String targetFarm = eventSection.getString("target-farm", "all");
+                int cooldown = eventSection.getInt("cooldown", 3600);
+
+                // Load Conditions
+                List<EventCondition> conditions = new ArrayList<>();
+                ConfigurationSection conditionsSection = eventSection.getConfigurationSection("conditions");
+                if (conditionsSection != null) {
+                    for (String key : conditionsSection.getKeys(false)) {
+                        conditions.add(new EventCondition(key, conditionsSection.getString(key)));
+                    }
+                }
+
+                // Load Phases
+                List<EventPhase> phases = new ArrayList<>();
+                List<Map<?, ?>> phasesData = eventSection.getMapList("phases");
+                for (Map<?, ?> phaseData : phasesData) {
+                    int duration = (int) phaseData.get("duration");
+                    List<String> onStartCommands = (List<String>) phaseData.get("on-start-commands");
+
+                    double spawnMod = 1.0;
+                    boolean clearMobs = false;
+                    int maxMobs = -1;
+                    if (phaseData.containsKey("farm-overrides")) {
+                        // We safely cast to a specific map type
+                        Map<String, Object> farmOverrides = (Map<String, Object>) phaseData.get("farm-overrides");
+                        // We use .toString() and then parse, which is safer
+                        spawnMod = Double.parseDouble(farmOverrides.getOrDefault("spawn-interval-modifier", "1.0").toString());
+                        clearMobs = Boolean.parseBoolean(farmOverrides.getOrDefault("clear-existing-mobs", "false").toString());
+                        maxMobs = Integer.parseInt(farmOverrides.getOrDefault("max-mobs", "-1").toString());
+                    }
+
+                    // --- Mob Overrides ---
+                    Map<String, Double> addMobs = new HashMap<>();
+                    Map<String, Double> setMobs = new HashMap<>();
+                    Map<String, List<String>> modifyRewards = new HashMap<>();
+
+                    if (phaseData.containsKey("mob-overrides")) {
+                        Map<String, Object> mobOverrides = (Map<String, Object>) phaseData.get("mob-overrides");
+
+                        // Manually and safely build the addMobs map
+                        if (mobOverrides.containsKey("add-mobs")) {
+                            // Cast to a Map, not a ConfigurationSection
+                            Map<String, Object> addMobsMap = (Map<String, Object>) mobOverrides.get("add-mobs");
+                            for (Map.Entry<String, Object> entry : addMobsMap.entrySet()) {
+                                addMobs.put(entry.getKey(), Double.parseDouble(entry.getValue().toString()));
+                            }
+                        }
+
+                        // Manually and safely build the setMobs map
+                        if (mobOverrides.containsKey("set-mobs")) {
+                            Map<String, Object> setMobsMap = (Map<String, Object>) mobOverrides.get("set-mobs");
+                            for (Map.Entry<String, Object> entry : setMobsMap.entrySet()) {
+                                setMobs.put(entry.getKey(), Double.parseDouble(entry.getValue().toString()));
+                            }
+                        }
+
+                        // Manually and safely build the modifyRewards map
+                        if (mobOverrides.containsKey("modify-rewards")) {
+                            Map<String, Object> modifyRewardsMap = (Map<String, Object>) mobOverrides.get("modify-rewards");
+                            for (Map.Entry<String, Object> entry : modifyRewardsMap.entrySet()) {
+                                // Here the value is a List of Strings, so we cast it directly
+                                modifyRewards.put(entry.getKey(), (List<String>) entry.getValue());
+                            }
+                        }
+                    }
+
+                    phases.add(new EventPhase(duration, onStartCommands, spawnMod, clearMobs, maxMobs, addMobs, setMobs, modifyRewards));
+                }
+
+                OasisEvent event = new OasisEvent(eventId, targetFarm, cooldown, conditions, phases);
+                events.put(eventId, event);
+
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to load event '" + eventId + "'. Check formatting.", e);
+            }
+        }
+        plugin.getLogger().info("Successfully loaded " + events.size() + " event(s).");
+    }
+
     private Location parseLocationString(World world, String str) {
         // ... (this method is unchanged)
         if (str == null) throw new IllegalArgumentException("Coordinate string is null");
@@ -149,7 +254,7 @@ public class ConfigManager {
     // --- NEW/UPDATED GETTERS ---
     public Map<String, Farm> getFarms() { return Collections.unmodifiableMap(farms); }
     public MobInfo getMobTemplate(String templateId) { return mobTemplates.get(templateId); }
-    public FileConfiguration getMobTemplatesConfig() {
-        return mobTemplatesConfig;
-    }
+    public FileConfiguration getMobTemplatesConfig() { return mobTemplatesConfig; }
+    public Map<String, OasisEvent> getEvents() { return Collections.unmodifiableMap(events); }
+    public FileConfiguration getEventsConfig() { return eventsConfig; }
 }
