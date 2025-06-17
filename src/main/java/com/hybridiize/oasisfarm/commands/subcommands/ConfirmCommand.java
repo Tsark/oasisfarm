@@ -49,7 +49,7 @@ public class ConfirmCommand extends SubCommand {
 
         // Reload farm data in memory and update hologram
         plugin.getHologramManager().removeFarmHologram(farmId);
-        plugin.getConfigManager().loadFarms();
+        plugin.getConfigManager().loadAllConfigs();
 
         player.sendMessage(ChatColor.GREEN + "Successfully redefined region for farm '" + farmId + "'!");
     }

@@ -53,7 +53,7 @@ public class ConfigManager {
         loadFarms();
     }
 
-    private void loadMobTemplates() {
+    public void loadMobTemplates() {
         mobTemplates.clear();
         mobTemplatesConfig = YamlConfiguration.loadConfiguration(mobTemplatesFile); // Reload from disk
 
@@ -88,7 +88,7 @@ public class ConfigManager {
         plugin.getLogger().info("Successfully loaded " + mobTemplates.size() + " mob template(s).");
     }
 
-    private void loadFarms() {
+    public void loadFarms() {
         farms.clear();
         plugin.reloadConfig();
         ConfigurationSection farmsSection = plugin.getConfig().getConfigurationSection("farms");

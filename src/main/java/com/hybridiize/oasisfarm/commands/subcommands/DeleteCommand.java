@@ -32,7 +32,7 @@ public class DeleteCommand extends SubCommand {
         plugin.saveConfig();
 
         // Reload farm data in memory
-        plugin.getConfigManager().loadFarms();
+        plugin.getConfigManager().loadAllConfigs();
 
         // Remove the hologram
         plugin.getHologramManager().removeFarmHologram(farmId);

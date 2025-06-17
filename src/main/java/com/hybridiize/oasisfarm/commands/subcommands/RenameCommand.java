@@ -47,7 +47,7 @@ public class RenameCommand extends SubCommand {
         // Save and reload
         plugin.saveConfig();
         plugin.getHologramManager().removeFarmHologram(oldName);
-        plugin.getConfigManager().loadFarms();
+        plugin.getConfigManager().loadAllConfigs();
 
         player.sendMessage(ChatColor.GREEN + "Successfully renamed farm '" + oldName + "' to '" + newName + "'.");
     }

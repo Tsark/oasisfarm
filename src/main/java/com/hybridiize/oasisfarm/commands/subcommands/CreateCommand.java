@@ -50,7 +50,7 @@ public class CreateCommand extends SubCommand {
         config.set(path + ".mobs.starter_zombie", 1.0);
 
         plugin.saveConfig();
-        plugin.getConfigManager().loadFarms();
+        plugin.getConfigManager().loadAllConfigs();
 
         plugin.getHologramManager().removeFarmHologram(farmId);
         player.sendMessage(ChatColor.GREEN + "Successfully created farm '" + farmId + "'!");

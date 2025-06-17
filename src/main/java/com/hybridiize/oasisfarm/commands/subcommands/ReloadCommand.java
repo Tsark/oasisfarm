@@ -14,7 +14,7 @@ public class ReloadCommand extends SubCommand {
     @Override
     public void perform(Player player, String[] args) {
         plugin.getHologramManager().removeAllHolograms();
-        plugin.getConfigManager().loadFarms();
+        plugin.getConfigManager().loadAllConfigs();
         player.sendMessage(ChatColor.GREEN + "OasisFarm configuration reloaded!");
     }
 }
