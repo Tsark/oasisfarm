@@ -1,0 +1,11 @@
+name: OasisFarm
+version: '1.0-SNAPSHOT'
+main: com.hybridiize.oasisfarm.Oasisfarm
+api-version: '1.21'
+depend: [PlaceholderAPI]
+softdepend: [DecentHolograms]
+commands:
+  oasisfarm:
+    description: Main command for the OasisFarm plugin.
+    aliases: [of]
+    permission: oasisfarm.admin
