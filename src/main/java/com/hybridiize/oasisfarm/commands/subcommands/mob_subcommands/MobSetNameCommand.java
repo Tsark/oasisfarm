@@ -10,7 +10,7 @@ public class MobSetNameCommand extends MobSubCommand {
     @Override
     public String getName() { return "setname"; }
     @Override
-    public String getDescription() { return "Sets the display name of a mob type."; }
+    public String getDescription() { return "Sets the display name of a mob template."; }
     @Override
     public String getSyntax() { return "/of mob setname <template_id> <name...>"; }
 
@@ -21,22 +21,22 @@ public class MobSetNameCommand extends MobSubCommand {
             return;
         }
 
-        String templateId = args[2]; // No farm needed now
+        String templateId = args[2];
         String name = Arrays.stream(args).skip(3).collect(Collectors.joining(" "));
 
-        FileConfiguration config = plugin.getConfig();
-        String path = "farms." + farmId + ".mobs." + mobType;
+        FileConfiguration mobTemplatesConfig = plugin.getConfigManager().getMobTemplatesConfig();
+        String path = templateId;
 
-        if (!config.contains(path)) {
-            player.sendMessage(ChatColor.RED + "That mob/farm combination does not exist.");
+        if (!mobTemplatesConfig.contains(path)) {
+            player.sendMessage(ChatColor.RED + "The mob template '" + templateId + "' does not exist.");
             return;
         }
 
-        config.set(path + ".display-name", name);
-        plugin.saveConfig();
-        plugin.getConfigManager().loadFarms();
+        mobTemplatesConfig.set(path + ".display-name", name);
+        plugin.getConfigManager().saveMobTemplatesConfig(); // Save the file
+        plugin.getConfigManager().loadAllConfigs(); // Reload all changes
 
         String coloredName = ChatColor.translateAlternateColorCodes('&', name);
-        player.sendMessage(ChatColor.GREEN + "Set display name for " + mobType + " in " + farmId + " to: " + coloredName);
+        player.sendMessage(ChatColor.GREEN + "Set display name for template '" + templateId + "' to: " + coloredName);
     }
 }

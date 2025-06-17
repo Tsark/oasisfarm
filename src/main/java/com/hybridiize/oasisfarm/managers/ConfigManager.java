@@ -32,6 +32,14 @@ public class ConfigManager {
         setupTemplateFile();
     }
 
+    public void saveMobTemplatesConfig() {
+        try {
+            mobTemplatesConfig.save(mobTemplatesFile);
+        } catch (java.io.IOException e) {
+            plugin.getLogger().log(Level.SEVERE, "Could not save mob-templates.yml!", e);
+        }
+    }
+
     private void setupTemplateFile() {
         mobTemplatesFile = new File(plugin.getDataFolder(), "mob-templates.yml");
         if (!mobTemplatesFile.exists()) {
@@ -141,4 +149,7 @@ public class ConfigManager {
     // --- NEW/UPDATED GETTERS ---
     public Map<String, Farm> getFarms() { return Collections.unmodifiableMap(farms); }
     public MobInfo getMobTemplate(String templateId) { return mobTemplates.get(templateId); }
+    public FileConfiguration getMobTemplatesConfig() {
+        return mobTemplatesConfig;
+    }
 }

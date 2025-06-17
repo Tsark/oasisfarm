@@ -4,16 +4,13 @@ import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
-
 public class MobSetHealthCommand extends MobSubCommand {
     @Override
     public String getName() { return "sethealth"; }
     @Override
-    public String getDescription() { return "Sets the max health of a mob type."; }
+    public String getDescription() { return "Sets the max health of a mob template."; }
     @Override
-    public String getSyntax() { return "/of mob sethealth <farm> <mob> <health>"; }
+    public String getSyntax() { return "/of mob sethealth <template_id> <health>"; }
 
     @Override
     public void perform(Player player, String[] args) {
@@ -22,12 +19,10 @@ public class MobSetHealthCommand extends MobSubCommand {
             return;
         }
 
-        String templateId = args[2]; // No farm needed now
-        String name = Arrays.stream(args).skip(3).collect(Collectors.joining(" "));
-
+        String templateId = args[2];
         double health;
         try {
-            health = Double.parseDouble(args[4]);
+            health = Double.parseDouble(args[3]);
             if (health <= 0) {
                 player.sendMessage(ChatColor.RED + "Health must be a positive number.");
                 return;
@@ -37,17 +32,17 @@ public class MobSetHealthCommand extends MobSubCommand {
             return;
         }
 
-        FileConfiguration config = plugin.getConfig();
-        String path = "farms." + farmId + ".mobs." + mobType;
+        FileConfiguration mobTemplatesConfig = plugin.getConfigManager().getMobTemplatesConfig();
+        String path = templateId;
 
-        if (!config.contains(path)) {
-            player.sendMessage(ChatColor.RED + "That mob/farm combination does not exist.");
+        if (!mobTemplatesConfig.contains(path)) {
+            player.sendMessage(ChatColor.RED + "The mob template '" + templateId + "' does not exist.");
             return;
         }
 
-        config.set(path + ".health", health);
-        plugin.saveConfig();
-        plugin.getConfigManager().loadFarms();
-        player.sendMessage(ChatColor.GREEN + "Set health for " + mobType + " in " + farmId + " to " + health + ".");
+        mobTemplatesConfig.set(path + ".health", health);
+        plugin.getConfigManager().saveMobTemplatesConfig();
+        plugin.getConfigManager().loadAllConfigs();
+        player.sendMessage(ChatColor.GREEN + "Set health for template '" + templateId + "' to " + health + ".");
     }
 }

@@ -10,7 +10,7 @@ public class MobRemoveCommand extends MobSubCommand {
     @Override
     public String getDescription() { return "Removes a mob type from a farm."; }
     @Override
-    public String getSyntax() { return "/of mob remove <template_id> <name...>"; }
+    public String getSyntax() { return "/of mob remove <farm_name> <template_id>"; } // Updated syntax
 
     @Override
     public void perform(Player player, String[] args) {
@@ -19,19 +19,19 @@ public class MobRemoveCommand extends MobSubCommand {
             return;
         }
 
-        String templateId = args[2]; // No farm needed now
-        String name = Arrays.stream(args).skip(3).collect(Collectors.joining(" "));
+        String farmId = args[2];
+        String templateId = args[3];
         FileConfiguration config = plugin.getConfig();
-        String mobPath = "farms." + farmId + ".mobs." + mobTypeStr;
+        String mobPath = "farms." + farmId + ".mobs." + templateId; // Path in config.yml
 
         if (!config.contains(mobPath)) {
-            player.sendMessage(ChatColor.RED + "Mob '" + mobTypeStr + "' not found in farm '" + farmId + "'.");
+            player.sendMessage(ChatColor.RED + "Template '" + templateId + "' not found in farm '" + farmId + "'.");
             return;
         }
 
         config.set(mobPath, null);
         plugin.saveConfig();
-        plugin.getConfigManager().loadFarms();
-        player.sendMessage(ChatColor.GREEN + "Removed " + mobTypeStr + " from farm " + farmId + ".");
+        plugin.getConfigManager().loadAllConfigs();
+        player.sendMessage(ChatColor.GREEN + "Removed " + templateId + " from farm " + farmId + ".");
     }
 }

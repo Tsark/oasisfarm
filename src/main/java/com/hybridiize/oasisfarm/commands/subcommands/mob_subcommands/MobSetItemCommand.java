@@ -13,22 +13,21 @@ public class MobSetItemCommand extends MobSubCommand {
     @Override
     public String getName() { return "setitem"; }
     @Override
-    public String getDescription() { return "Sets the equipment for a mob type."; }
+    public String getDescription() { return "Sets the equipment for a mob template."; }
     @Override
-    public String getSyntax() { return "/of mob setitem <template_id> <item...>"; }
+    public String getSyntax() { return "/of mob setitem <template_id> <slot> <item>"; }
 
     @Override
     public void perform(Player player, String[] args) {
-        if (args.length < 4) {
+        if (args.length < 5) {
             player.sendMessage(ChatColor.RED + "Usage: " + getSyntax());
             player.sendMessage(ChatColor.RED + "Valid slots: HAND, OFFHAND, HELMET, CHESTPLATE, LEGGINGS, BOOTS");
             return;
         }
 
-        String templateId = args[2]; // No farm needed now
-        String name = Arrays.stream(args).skip(3).collect(Collectors.joining(" "));
-        String slot = args[4].toUpperCase();
-        String itemName = args[5].toUpperCase();
+        String templateId = args[2];
+        String slot = args[3].toUpperCase();
+        String itemName = args[4].toUpperCase();
 
         if (!validSlots.contains(slot)) {
             player.sendMessage(ChatColor.RED + "Invalid slot '" + slot + "'.");
@@ -45,20 +44,19 @@ public class MobSetItemCommand extends MobSubCommand {
             return;
         }
 
-        FileConfiguration config = plugin.getConfig();
-        String path = "farms." + farmId + ".mobs." + mobType;
+        FileConfiguration mobTemplatesConfig = plugin.getConfigManager().getMobTemplatesConfig();
+        String path = templateId;
 
-        if (!config.contains(path)) {
-            player.sendMessage(ChatColor.RED + "That mob/farm combination does not exist.");
+        if (!mobTemplatesConfig.contains(path)) {
+            player.sendMessage(ChatColor.RED + "The mob template '" + templateId + "' does not exist.");
             return;
         }
 
-        // Use "null" to remove the item from the slot
         String itemToSet = (itemName.equalsIgnoreCase("AIR") || itemName.equalsIgnoreCase("NONE")) ? null : itemName;
-        config.set(path + ".equipment." + slot, itemToSet);
+        mobTemplatesConfig.set(path + ".equipment." + slot, itemToSet);
 
-        plugin.saveConfig();
-        plugin.getConfigManager().loadFarms();
-        player.sendMessage(ChatColor.GREEN + "Set " + slot + " for " + mobType + " in " + farmId + " to " + itemName + ".");
+        plugin.getConfigManager().saveMobTemplatesConfig();
+        plugin.getConfigManager().loadAllConfigs();
+        player.sendMessage(ChatColor.GREEN + "Set " + slot + " for template '" + templateId + "' to " + itemName + ".");
     }
 }
