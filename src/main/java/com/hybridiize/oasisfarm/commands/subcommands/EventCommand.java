@@ -19,10 +19,12 @@ public class EventCommand extends SubCommand {
 
     @Override
     public String getName() { return "event"; }
+
     @Override
     public String getDescription() { return "Manages OasisFarm events."; }
+
     @Override
-    public String getSyntax() { return "/of event <subcommand>"; }
+    public String getSyntax() { return "/of event <subcommand> [...]"; }
 
     @Override
     public void perform(Player player, String[] args) {

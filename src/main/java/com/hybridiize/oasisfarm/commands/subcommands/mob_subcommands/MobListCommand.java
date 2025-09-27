@@ -1,7 +1,6 @@
 package com.hybridiize.oasisfarm.commands.subcommands.mob_subcommands;
 
 import com.hybridiize.oasisfarm.farm.Farm;
-import com.hybridiize.oasisfarm.farm.MobInfo;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
@@ -10,8 +9,10 @@ import java.util.Map;
 public class MobListCommand extends MobSubCommand {
     @Override
     public String getName() { return "list"; }
+
     @Override
     public String getDescription() { return "Lists all mobs and their chances for a farm."; }
+
     @Override
     public String getSyntax() { return "/of mob list <farm_name>"; }
 
@@ -35,11 +36,12 @@ public class MobListCommand extends MobSubCommand {
             return;
         }
 
+        double totalChance = 0;
         for (Map.Entry<String, Double> entry : farm.getMobs().entrySet()) {
             player.sendMessage(ChatColor.AQUA + entry.getKey() + ": " +
-                    ChatColor.WHITE + (entry.getValue() * 100) + "%");
+                    ChatColor.WHITE + String.format("%.2f", entry.getValue() * 100) + "%");
+            totalChance += entry.getValue();
         }
-
+        player.sendMessage(ChatColor.GRAY + "Total Chance: " + String.format("%.2f", totalChance * 100) + "%");
     }
-
 }

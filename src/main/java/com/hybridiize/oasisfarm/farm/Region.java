@@ -11,7 +11,6 @@ public class Region {
         this.pos2 = pos2;
     }
 
-    // --- NEW GETTER METHODS ---
     public Location getPos1() {
         return pos1;
     }
@@ -19,21 +18,27 @@ public class Region {
     public Location getPos2() {
         return pos2;
     }
-    // ... inside the Region class ...
 
     public boolean contains(Location loc) {
-        if (!loc.getWorld().equals(pos1.getWorld())) {
+        if (loc == null || !loc.getWorld().equals(pos1.getWorld())) {
             return false;
         }
-        int minX = Math.min(pos1.getBlockX(), pos2.getBlockX());
-        int maxX = Math.max(pos1.getBlockX(), pos2.getBlockX());
-        int minY = Math.min(pos1.getBlockY(), pos2.getBlockY());
-        int maxY = Math.max(pos1.getBlockY(), pos2.getBlockY());
-        int minZ = Math.min(pos1.getBlockZ(), pos2.getBlockZ());
-        int maxZ = Math.max(pos1.getBlockZ(), pos2.getBlockZ());
+        double minX = Math.min(pos1.getX(), pos2.getX());
+        double maxX = Math.max(pos1.getX(), pos2.getX());
+        double minY = Math.min(pos1.getY(), pos2.getY());
+        double maxY = Math.max(pos1.getY(), pos2.getY());
+        double minZ = Math.min(pos1.getZ(), pos2.getZ());
+        double maxZ = Math.max(pos1.getZ(), pos2.getZ());
 
         return loc.getX() >= minX && loc.getX() <= maxX &&
                 loc.getY() >= minY && loc.getY() <= maxY &&
                 loc.getZ() >= minZ && loc.getZ() <= maxZ;
+    }
+
+    public Location getCenter() {
+        double x = (pos1.getX() + pos2.getX()) / 2.0;
+        double y = (pos1.getY() + pos2.getY()) / 2.0;
+        double z = (pos1.getZ() + pos2.getZ()) / 2.0;
+        return new Location(pos1.getWorld(), x, y, z);
     }
 }

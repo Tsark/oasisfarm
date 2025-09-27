@@ -1,9 +1,25 @@
 name: OasisFarm
-version: '3.0'
+version: ${project.version}
+
 main: com.hybridiize.oasisfarm.Oasisfarm
+
 api-version: '1.21'
-depend: [PlaceholderAPI]
-softdepend: [DecentHolograms]
+
+dependencies:
+  server:
+    PlaceholderAPI:
+      load: BEFORE
+      required: true
+    DecentHolograms:
+      load: BEFORE
+      required: false
+    Vault:
+      load: BEFORE
+      required: false
+    MythicMobs:
+      load: BEFORE
+      required: false
+
 commands:
   oasisfarm:
     description: Main command for the OasisFarm plugin.

@@ -8,8 +8,10 @@ import org.bukkit.entity.Player;
 public class RenameCommand extends SubCommand {
     @Override
     public String getName() { return "rename"; }
+
     @Override
     public String getDescription() { return "Renames an existing farm."; }
+
     @Override
     public String getSyntax() { return "/of rename <old_name> <new_name>"; }
 
@@ -37,14 +39,10 @@ public class RenameCommand extends SubCommand {
             return;
         }
 
-        // Copy the old farm's data to the new name
         ConfigurationSection oldFarmData = config.getConfigurationSection(oldPath);
         config.set(newPath, oldFarmData);
-
-        // Remove the old farm's data
         config.set(oldPath, null);
 
-        // Save and reload
         plugin.saveConfig();
         plugin.getHologramManager().removeFarmHologram(oldName);
         plugin.getConfigManager().loadAllConfigs();

@@ -16,12 +16,19 @@ import java.util.UUID;
 public final class Oasisfarm extends JavaPlugin {
 
     private static Oasisfarm instance;
+
+    // Managers
     private ConfigManager configManager;
-    private SelectionManager selectionManager;
+    private EconomyManager economyManager;
+    private EventDataManager eventDataManager;
+    private EventManager eventManager;
+    private FarmDataManager farmDataManager;
     private FarmManager farmManager;
     private HologramManager hologramManager;
     private PendingConfirmationManager confirmationManager;
-    private EventManager eventManager;
+    private RewardManager rewardManager;
+    private SelectionManager selectionManager;
+    private boolean mythicMobsEnabled = false;
 
     @Override
     public void onEnable() {
@@ -29,18 +36,31 @@ public final class Oasisfarm extends JavaPlugin {
 
         saveDefaultConfig();
 
-        // Initialize managers
+        // Initialize all managers
         this.configManager = new ConfigManager(this);
+        this.economyManager = new EconomyManager(this);
+        this.eventDataManager = new EventDataManager(this);
+        this.farmDataManager = new FarmDataManager(this);
         this.selectionManager = new SelectionManager();
-        this.farmManager = new FarmManager(this);
-        this.hologramManager = new HologramManager(this);
         this.confirmationManager = new PendingConfirmationManager();
+        this.rewardManager = new RewardManager(this);
+        this.farmManager = new FarmManager(this);
         this.eventManager = new EventManager(this);
+        this.hologramManager = new HologramManager(this);
 
-        // Load data from config
+        // MythicMobs Integration Check
+        if (getServer().getPluginManager().isPluginEnabled("MythicMobs")) {
+            this.mythicMobsEnabled = true;
+            getLogger().info("Successfully hooked into MythicMobs! Mythic Mob spawning is enabled.");
+        } else {
+            this.mythicMobsEnabled = false;
+            getLogger().info("MythicMobs not found. Spawning will be limited to vanilla mobs.");
+        }
+
+        // Load all data from configuration files
         this.configManager.loadAllConfigs();
 
-        // Register commands - THIS IS THE FIX FOR THE SECOND ERROR
+        // Register commands
         getCommand("oasisfarm").setExecutor(new CommandManager(selectionManager, confirmationManager));
 
         // Register event listeners
@@ -48,19 +68,21 @@ public final class Oasisfarm extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new MobKillListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerMoveListener(this), this);
 
-        getLogger().info("Oasisfarm has been enabled successfully!");
+        getLogger().info("OasisFarm has been enabled successfully!");
     }
 
     @Override
     public void onDisable() {
-        if (hologramManager != null) {
-            hologramManager.removeAllHolograms();
+        // Stop all events gracefully
+        if (eventManager != null) {
+            eventManager.stopAllEvents();
+            getLogger().info("All active events have been stopped.");
         }
 
+        // Remove all plugin-spawned mobs from the world
         if (farmManager != null) {
             getLogger().info("Removing all tracked OasisFarm mobs...");
-            // We get the set of UUIDs directly from the keySet now
-            Set<UUID> mobIds = new HashSet<>(farmManager.getTrackedMobIds()); // Use a copy to avoid concurrent modification issues
+            Set<UUID> mobIds = new HashSet<>(farmManager.getTrackedMobIds());
             int removedCount = 0;
             for (UUID mobId : mobIds) {
                 Entity mob = Bukkit.getEntity(mobId);
@@ -72,8 +94,25 @@ public final class Oasisfarm extends JavaPlugin {
             getLogger().info("Successfully removed " + removedCount + " mobs.");
         }
 
-        getLogger().info("Oasisfarm has been disabled.");
+        // Remove all holograms
+        if (hologramManager != null) {
+            hologramManager.removeAllHolograms();
+        }
+
+        // Save all persistent data to disk
+        if (farmDataManager != null) {
+            farmDataManager.saveData();
+            getLogger().info("Saved farm data.");
+        }
+        if (eventDataManager != null) {
+            eventDataManager.saveData();
+            getLogger().info("Saved event data.");
+        }
+
+        getLogger().info("OasisFarm has been disabled.");
     }
+
+    // --- GETTERS ---
 
     public static Oasisfarm getInstance() {
         return instance;
@@ -82,11 +121,36 @@ public final class Oasisfarm extends JavaPlugin {
     public ConfigManager getConfigManager() {
         return configManager;
     }
+
+    public EconomyManager getEconomyManager() {
+        return economyManager;
+    }
+
+    public EventDataManager getEventDataManager() {
+        return eventDataManager;
+    }
+
+    public EventManager getEventManager() {
+        return eventManager;
+    }
+
+    public FarmDataManager getFarmDataManager() {
+        return farmDataManager;
+    }
+
     public FarmManager getFarmManager() {
         return farmManager;
     }
+
     public HologramManager getHologramManager() {
         return hologramManager;
     }
-    public EventManager getEventManager() { return eventManager; }
+
+    public RewardManager getRewardManager() {
+        return rewardManager;
+    }
+
+    public boolean isMythicMobsEnabled() {
+        return mythicMobsEnabled;
+    }
 }

@@ -7,8 +7,10 @@ import java.util.Set;
 public class ListCommand extends SubCommand {
     @Override
     public String getName() { return "list"; }
+
     @Override
     public String getDescription() { return "Lists all available farms."; }
+
     @Override
     public String getSyntax() { return "/of list"; }
 

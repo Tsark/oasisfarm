@@ -7,8 +7,10 @@ import org.bukkit.entity.Player;
 public class MobSetHealthCommand extends MobSubCommand {
     @Override
     public String getName() { return "sethealth"; }
+
     @Override
     public String getDescription() { return "Sets the max health of a mob template."; }
+
     @Override
     public String getSyntax() { return "/of mob sethealth <template_id> <health>"; }
 

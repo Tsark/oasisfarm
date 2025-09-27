@@ -1,21 +1,55 @@
-# OasisFarm Mob Templates
-# Define all your custom mobs here. Farms will refer to them by their ID (e.g., "starter_zombie").
+# OasisFarm Mob Templates File (FINAL V4.6 Structure)
 
 starter_zombie:
-  type: ZOMBIE
+  type: Zombie
   display-name: "&cStarter Zombie"
   health: 15.0
-  equipment:
-    HAND: "WOODEN_SWORD"
   rewards:
-    - "msg %player_name% &aYou killed a zombie and earned $10!"
-    - "eco give %player_name% 10"
+    killer:
+      common_rewards:
+        chance: 1.0
+        rewards:
+          - type: MONEY
+            amount: 10
+          - type: EXP
+            amount: 5
 
 starter_skeleton:
-  type: SKELETON
+  type: Skeleton
   kill-cooldown: 5
-  kill-permission: "oasisfarm.kill.skeleton_knight"
-  broadcast-kill: "&6[!] &e%player_name% &7has defeated a &cSkeleton Knight&7!"
   rewards:
-    - "msg %player_name% &eYou killed a skeleton! Here is $25!"
-    - "eco give %player_name% 25"
+    killer:
+      guaranteed_loot:
+        chance: 1.0
+        rewards:
+          - type: MONEY
+            amount: 25
+          - type: MESSAGE
+            message: "&eYou slayed a skeleton!"
+      rare_diamond:
+        chance: 0.1
+        rewards:
+          - type: COMMAND
+            command: "give %player_name% diamond 1"
+
+skeletal_minion:
+  # This tells OasisFarm to use the MythicMobs API for this mob.
+  mob-type: MYTHIC
+  # The internal ID of the mob from MythicMobs' mobs folder.
+  mythic-id: SkeletalMinion
+  # The level to spawn this Mythic Mob at.
+  level: 5
+
+  # A vanilla mob type to use as a fallback if MythicMobs isn't installed.
+  type: SKELETON
+
+  # OasisFarm's reward system works perfectly with Mythic Mobs!
+  rewards:
+    killer:
+      common_rewards:
+        chance: 1.0
+        rewards:
+          - type: MONEY
+            amount: 50
+          - type: MESSAGE
+            message: "&7You defeated a Skeletal Minion."

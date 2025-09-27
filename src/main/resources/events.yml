@@ -1,50 +1,58 @@
-# OasisFarm Event Configuration
+# OasisFarm Event Configuration (V4.5)
 
-# Check for possible events every 60 seconds (1200 ticks)
-event-check-interval: 1200
+# How often the plugin checks if event conditions are met (in server ticks).
+event-check-interval: 1200 # 60 seconds
 
 events:
   blood_moon:
-    # The farm this event can happen in. Can be "all" or a specific farm_id.
     target-farm: "starter_zone"
-    # Cooldown in seconds after the event ends before it can be triggered again.
     cooldown: 3600 # 1 hour
+    event-radius: 100 # Players within 100 blocks see the Boss Bar
+    on-end-commands:
+      - "broadcast &aThe blood moon recedes... for now."
 
-    # --- CONDITIONS (ALL must be met to trigger) ---
     conditions:
       MIN_PLAYERS: 1
-      TIME_OF_DAY: "NIGHT"
-      # PAPI_CHECK: # Example of a PlaceholderAPI check
-      #  placeholder: "%server_total_money%"
-      #  match-type: "GREATER_THAN"
-      #  value: "1000000"
+      TOTAL_KILLS_IN_FARM: 25
 
-    # --- PHASES (run in order) ---
+    progress-tracking:
+      hologram-enabled: true
+      tracked-condition: "TOTAL_KILLS_IN_FARM"
+      hologram-line: "&cBlood Moon: &e{current_value}&7/&e{required_value} Kills"
+
     phases:
-      # Phase 1: The Warning
       - duration: 300 # 5 minutes
         on-start-commands:
           - "broadcast &cThe moon turns red! The undead grow restless..."
+        on-end-commands:
+          - "broadcast &eThe first wave has been repelled!"
         farm-overrides:
-          spawn-interval-modifier: 0.5 # Mobs spawn twice as fast
+          spawn-interval-modifier: 0.5
         mob-overrides:
-          # Add new mobs to the spawn list just for this phase, with their chances
           add-mobs:
-            starter_skeleton: 0.20 # Increase skeleton chance
-          # Modify the rewards for a mob during this phase
+            starter_skeleton: 0.20
           modify-rewards:
             starter_zombie:
-              - "eco give %player_name% 20" # Double rewards
-              - "msg %player_name% &aYou killed a supercharged zombie!"
+              killer:
+                - type: MONEY
+                  amount: 25 # Increased rewards during the event
+                - type: EXP
+                  amount: 10
 
-      # Phase 2: The Boss
+  daily_world_boss:
+    target-farm: "boss_arena"
+    cooldown: 600 # 10 minute cooldown
+    event-radius: 150
+    conditions:
+      # This event runs on a timer
+      INTERVAL: 86400 # Every 24 hours (86400 seconds)
+    phases:
       - duration: 600 # 10 minutes
         on-start-commands:
-          - "broadcast &4&lA powerful entity has been drawn by the blood moon!"
+          - "broadcast &4&lA powerful entity has appeared in the Boss Arena!"
         farm-overrides:
-          clear-existing-mobs: true # Despawn all normal farm mobs
-          max-mobs: 1 # Only allow one mob in the farm
+          clear-existing-mobs: true
+          max-mobs: 1
         mob-overrides:
-          # Force the spawn list to be ONLY this mob
           set-mobs:
-            undead_king: 1.0 # Requires an 'undead_king' template in mob-templates.yml
+            undead_king: 1.0

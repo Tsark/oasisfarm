@@ -7,8 +7,10 @@ import org.bukkit.entity.Player;
 public class DeleteCommand extends SubCommand {
     @Override
     public String getName() { return "delete"; }
+
     @Override
-    public String getDescription() { return "Deletes a farm."; }
+    public String getDescription() { return "Deletes an existing farm."; }
+
     @Override
     public String getSyntax() { return "/of delete <farm_name>"; }
 
@@ -21,20 +23,18 @@ public class DeleteCommand extends SubCommand {
 
         String farmId = args[1];
         FileConfiguration config = plugin.getConfig();
+        String path = "farms." + farmId;
 
-        if (!config.contains("farms." + farmId)) {
+        if (!config.contains(path)) {
             player.sendMessage(ChatColor.RED + "A farm with that name does not exist!");
             return;
         }
 
-        // Remove from config and save
-        config.set("farms." + farmId, null);
+        config.set(path, null);
         plugin.saveConfig();
 
-        // Reload farm data in memory
         plugin.getConfigManager().loadAllConfigs();
 
-        // Remove the hologram
         plugin.getHologramManager().removeFarmHologram(farmId);
 
         player.sendMessage(ChatColor.GREEN + "Successfully deleted farm '" + farmId + "'!");

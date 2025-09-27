@@ -4,6 +4,7 @@ import com.hybridiize.oasisfarm.managers.SelectionManager;
 import com.hybridiize.oasisfarm.util.Constants;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -30,14 +31,21 @@ public class WandListener implements Listener {
         }
 
         Action action = event.getAction();
+        Block clickedBlock = event.getClickedBlock();
+
+        // Ensure a block was actually clicked
+        if (clickedBlock == null) {
+            return;
+        }
+
         if (action == Action.LEFT_CLICK_BLOCK) {
             event.setCancelled(true); // Prevents the block from breaking
-            Location loc = event.getClickedBlock().getLocation();
+            Location loc = clickedBlock.getLocation();
             selectionManager.setPos1(player, loc);
             player.sendMessage(ChatColor.GREEN + "Position 1 set to (" + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ() + ")");
         } else if (action == Action.RIGHT_CLICK_BLOCK) {
-            event.setCancelled(true); // Prevents any other action
-            Location loc = event.getClickedBlock().getLocation();
+            event.setCancelled(true); // Prevents any other action (e.g., opening a chest)
+            Location loc = clickedBlock.getLocation();
             selectionManager.setPos2(player, loc);
             player.sendMessage(ChatColor.GREEN + "Position 2 set to (" + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ() + ")");
         }

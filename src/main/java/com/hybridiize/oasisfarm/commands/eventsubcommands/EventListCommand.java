@@ -7,8 +7,10 @@ import java.util.Set;
 public class EventListCommand extends EventSubCommand {
     @Override
     public String getName() { return "list"; }
+
     @Override
     public String getDescription() { return "Lists all configured events."; }
+
     @Override
     public String getSyntax() { return "/of event list"; }
 

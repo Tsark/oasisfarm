@@ -8,8 +8,10 @@ import org.bukkit.entity.Player;
 public class TeleportCommand extends SubCommand {
     @Override
     public String getName() { return "tp"; }
+
     @Override
     public String getDescription() { return "Teleports you to a farm's center."; }
+
     @Override
     public String getSyntax() { return "/of tp <farm_name>"; }
 
@@ -28,12 +30,8 @@ public class TeleportCommand extends SubCommand {
             return;
         }
 
-        Location pos1 = farm.getRegion().getPos1();
-        Location pos2 = farm.getRegion().getPos2();
-        double x = (pos1.getX() + pos2.getX()) / 2.0;
-        double y = Math.max(pos1.getY(), pos2.getY()) + 1.0;
-        double z = (pos1.getZ() + pos2.getZ()) / 2.0;
-        Location teleportLoc = new Location(pos1.getWorld(), x, y, z);
+        // Teleport to the center, one block above the calculated middle Y-level
+        Location teleportLoc = farm.getRegion().getCenter().add(0, 1, 0);
 
         player.teleport(teleportLoc);
         player.sendMessage(ChatColor.GREEN + "Teleported to " + farmId);

@@ -18,8 +18,10 @@ public class ConfirmCommand extends SubCommand {
 
     @Override
     public String getName() { return "confirm"; }
+
     @Override
     public String getDescription() { return "Confirms a pending action, like setregion."; }
+
     @Override
     public String getSyntax() { return "/of confirm"; }
 
@@ -47,7 +49,6 @@ public class ConfirmCommand extends SubCommand {
         plugin.saveConfig();
         confirmationManager.clearPending(player);
 
-        // Reload farm data in memory and update hologram
         plugin.getHologramManager().removeFarmHologram(farmId);
         plugin.getConfigManager().loadAllConfigs();
 

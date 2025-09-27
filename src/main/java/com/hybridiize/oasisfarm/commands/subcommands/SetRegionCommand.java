@@ -13,8 +13,10 @@ public class SetRegionCommand extends SubCommand {
 
     @Override
     public String getName() { return "setregion"; }
+
     @Override
-    public String getDescription() { return "Begins the process of redefining a farm's area."; }
+    public String getDescription() { return "Begins redefining a farm's area."; }
+
     @Override
     public String getSyntax() { return "/of setregion <farm_name>"; }
 
@@ -33,7 +35,7 @@ public class SetRegionCommand extends SubCommand {
 
         confirmationManager.setPendingResize(player, farmId);
 
-        player.sendMessage(ChatColor.GOLD + "Now redefining region for '" + farmId + "'.");
+        player.sendMessage(ChatColor.GOLD + "Redefining region for '" + farmId + "'.");
         player.sendMessage(ChatColor.AQUA + "Use the wand to select two new points, then type " + ChatColor.YELLOW + "/of confirm" + ChatColor.AQUA + " to save.");
     }
 }

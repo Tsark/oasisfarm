@@ -17,7 +17,7 @@ public class EventStatusCommand extends EventSubCommand {
         player.sendMessage(ChatColor.GOLD + "--- Event Status ---");
 
         // Running Events
-        Map<String, String> runningEvents = plugin.getEventManager().getRunningEventFarmMap();
+        Map<String, String> runningEvents = plugin.getEventManager().getActiveFarmEvents();
         if (runningEvents.isEmpty()) {
             player.sendMessage(ChatColor.GREEN + "No events are currently running.");
         } else {

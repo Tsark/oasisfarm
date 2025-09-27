@@ -9,12 +9,16 @@ import org.bukkit.entity.Player;
 public class CreateCommand extends SubCommand {
     private final SelectionManager selectionManager;
 
-    public CreateCommand(SelectionManager selectionManager) { this.selectionManager = selectionManager; }
+    public CreateCommand(SelectionManager selectionManager) {
+        this.selectionManager = selectionManager;
+    }
 
     @Override
     public String getName() { return "create"; }
+
     @Override
     public String getDescription() { return "Creates a new farm from your selection."; }
+
     @Override
     public String getSyntax() { return "/of create <farm_name>"; }
 
@@ -32,8 +36,9 @@ public class CreateCommand extends SubCommand {
 
         String farmId = args[1];
         FileConfiguration config = plugin.getConfig();
+        String path = "farms." + farmId;
 
-        if (config.contains("farms." + farmId)) {
+        if (config.contains(path)) {
             player.sendMessage(ChatColor.RED + "A farm with that name already exists!");
             return;
         }
@@ -41,13 +46,12 @@ public class CreateCommand extends SubCommand {
         Location pos1 = selectionManager.getPos1(player);
         Location pos2 = selectionManager.getPos2(player);
         String worldName = pos1.getWorld().getName();
-        String path = "farms." + farmId;
 
         config.set(path + ".region.world", worldName);
         config.set(path + ".region.pos1", pos1.getBlockX() + "," + pos1.getBlockY() + "," + pos1.getBlockZ());
         config.set(path + ".region.pos2", pos2.getBlockX() + "," + pos2.getBlockY() + "," + pos2.getBlockZ());
         config.set(path + ".max-mobs", 10);
-        config.set(path + ".mobs.starter_zombie", 1.0);
+        config.set(path + ".mobs.starter_zombie", 1.0); // Default to a known template
 
         plugin.saveConfig();
         plugin.getConfigManager().loadAllConfigs();

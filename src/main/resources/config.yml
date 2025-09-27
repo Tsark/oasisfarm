@@ -1,17 +1,35 @@
-# OasisFarm Configuration File
+# OasisFarm Main Configuration File (V4.5)
 
+# How often the plugin's main spawner ticks (in server ticks). 20 ticks = 1 second.
+# This is a base value; events can modify it temporarily.
 farm-check-interval: 100
 
 farms:
   starter_zone:
+    # Cooldown in seconds before a player can re-enter this farm region.
     entry-cooldown: 60
+
+    # The physical boundaries of the farm.
     region:
       world: "world"
       pos1: "100,64,100"
       pos2: "200,80,200"
+
+    # The maximum number of mobs allowed in this farm at one time.
     max-mobs: 50
+
+    # List of mobs that can spawn here.
+    # Format is: <template_id_from_mob-templates.yml>: <spawn_chance_decimal>
     mobs:
-      # Mob templates are now defined in mob-templates.yml
-      # Format is: <template_id>: <spawn_chance>
       starter_zombie: 0.80
       starter_skeleton: 0.20
+
+  boss_arena:
+    entry-cooldown: 300
+    region:
+      world: "world"
+      pos1: "500,64,500"
+      pos2: "550,80,550"
+    max-mobs: 1
+    mobs:
+      undead_king: 1.0

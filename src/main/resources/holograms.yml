@@ -1,0 +1,18 @@
+templates:
+  default-farm-hologram:
+    # These lines will be parsed for OasisFarm placeholders and PAPI placeholders.
+    lines:
+      - "&b&l{farm_name}"
+      - "&7--------------------"
+      - "&fMobs: &a{farm_mobs_current}&7/&e{farm_mobs_max}"
+      - "&fEvent: &c{event_name}"
+      - "&fProgress: &e{event_progress_current}&7/&e{event_progress_required}"
+    # How often the hologram should update (in seconds).
+    update-interval: 5
+
+  collection-pot-hologram:
+    lines:
+      - "&6&lCollection Pot"
+      - "&fCurrent: &e${pot_current}"
+      - "&fGoal: &e${pot_required}"
+      - "&a&l{pot_progress_bar}"

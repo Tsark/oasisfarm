@@ -6,8 +6,10 @@ import org.bukkit.entity.Player;
 public class EventStopCommand extends EventSubCommand {
     @Override
     public String getName() { return "stop"; }
+
     @Override
     public String getDescription() { return "Manually stops a running event."; }
+
     @Override
     public String getSyntax() { return "/of event stop <event_id>"; }
 

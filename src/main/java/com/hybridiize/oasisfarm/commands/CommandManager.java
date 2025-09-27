@@ -1,14 +1,13 @@
 package com.hybridiize.oasisfarm.commands;
 
 import com.hybridiize.oasisfarm.commands.subcommands.*;
-import com.hybridiize.oasisfarm.managers.PendingConfirmationManager; // <-- IMPORT
+import com.hybridiize.oasisfarm.managers.PendingConfirmationManager;
 import com.hybridiize.oasisfarm.managers.SelectionManager;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import com.hybridiize.oasisfarm.commands.subcommands.EventCommand;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,21 +16,20 @@ public class CommandManager implements CommandExecutor {
 
     private final List<SubCommand> subCommands = new ArrayList<>();
 
-    // THE CONSTRUCTOR NOW ACCEPTS BOTH MANAGERS
     public CommandManager(SelectionManager selectionManager, PendingConfirmationManager confirmationManager) {
-        // Register all our commands here
-        subCommands.add(new WandCommand());
+        // Register all our sub-commands
         subCommands.add(new CreateCommand(selectionManager));
-        subCommands.add(new RenameCommand());
-        subCommands.add(new SetRegionCommand(confirmationManager)); // This will now be recognized
-        subCommands.add(new ConfirmCommand(confirmationManager, selectionManager)); // This will now be recognized
-        subCommands.add(new MobCommand());
-        subCommands.add(new ListCommand());
         subCommands.add(new DeleteCommand());
         subCommands.add(new InfoCommand());
-        subCommands.add(new TeleportCommand());
-        subCommands.add(new EventCommand());
+        subCommands.add(new ListCommand());
         subCommands.add(new ReloadCommand());
+        subCommands.add(new RenameCommand());
+        subCommands.add(new SetRegionCommand(confirmationManager));
+        subCommands.add(new ConfirmCommand(confirmationManager, selectionManager));
+        subCommands.add(new TeleportCommand());
+        subCommands.add(new WandCommand());
+        subCommands.add(new MobCommand());
+        subCommands.add(new EventCommand());
     }
 
     @Override
@@ -61,9 +59,10 @@ public class CommandManager implements CommandExecutor {
     }
 
     private void sendHelpMessage(Player player) {
-        player.sendMessage(ChatColor.GOLD + "--- OasisFarm Help ---");
+        player.sendMessage(ChatColor.GOLD + "" + ChatColor.STRIKETHROUGH + "-----------------" + ChatColor.GOLD + "[ OasisFarm Help ]" + ChatColor.STRIKETHROUGH + "-----------------");
         for (SubCommand subCommand : subCommands) {
             player.sendMessage(ChatColor.AQUA + subCommand.getSyntax() + ChatColor.GRAY + " - " + subCommand.getDescription());
         }
+        player.sendMessage(ChatColor.GOLD + "" + ChatColor.STRIKETHROUGH + "----------------------------------------------------");
     }
 }

@@ -12,10 +12,12 @@ public class MobSetItemCommand extends MobSubCommand {
 
     @Override
     public String getName() { return "setitem"; }
+
     @Override
     public String getDescription() { return "Sets the equipment for a mob template."; }
+
     @Override
-    public String getSyntax() { return "/of mob setitem <template_id> <slot> <item>"; }
+    public String getSyntax() { return "/of mob setitem <template_id> <slot> <item_name|none>"; }
 
     @Override
     public void perform(Player player, String[] args) {
@@ -31,7 +33,6 @@ public class MobSetItemCommand extends MobSubCommand {
 
         if (!validSlots.contains(slot)) {
             player.sendMessage(ChatColor.RED + "Invalid slot '" + slot + "'.");
-            player.sendMessage(ChatColor.RED + "Valid slots: HAND, OFFHAND, HELMET, CHESTPLATE, LEGGINGS, BOOTS");
             return;
         }
 

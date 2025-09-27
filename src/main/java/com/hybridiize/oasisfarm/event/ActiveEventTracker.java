@@ -3,7 +3,7 @@ package com.hybridiize.oasisfarm.event;
 public class ActiveEventTracker {
     private final OasisEvent event;
     private int currentPhaseIndex;
-    public long phaseEndTime;
+    private long phaseEndTime;
 
     public ActiveEventTracker(OasisEvent event) {
         this.event = event;
@@ -29,19 +29,26 @@ public class ActiveEventTracker {
         return currentPhaseIndex >= event.getPhases().size();
     }
 
-    // This method moves to the next phase and sets its timer
+    /**
+     * Moves the tracker to the next phase in the list and sets the timer for the new phase.
+     * @return The new EventPhase, or null if the event has ended.
+     */
     public EventPhase advanceToNextPhase() {
         currentPhaseIndex++;
         if (hasEnded()) {
             return null; // The event is over
         }
         EventPhase newPhase = getCurrentPhase();
-        // Set the end time for the new phase
-        this.phaseEndTime = System.currentTimeMillis() + (newPhase.getDuration() * 1000L);
+        if (newPhase != null) {
+            // Set the end time for the new phase
+            this.phaseEndTime = System.currentTimeMillis() + (newPhase.getDuration() * 1000L);
+        }
         return newPhase;
     }
 
     public boolean isPhaseOver() {
+        // If the index is -1, the first phase hasn't started, so it's "over" and ready to begin.
+        if (currentPhaseIndex < 0) return true;
         return System.currentTimeMillis() >= phaseEndTime;
     }
 

@@ -12,20 +12,24 @@ public class MobCommand extends SubCommand {
 
     public MobCommand() {
         // Register our mob-specific commands
-        subCommands.add(new MobListCommand());
         subCommands.add(new MobAddCommand());
-        subCommands.add(new MobRemoveCommand());subCommands.add(new MobSetNameCommand());
+        subCommands.add(new MobListCommand());
+        subCommands.add(new MobRebalanceCommand());
+        subCommands.add(new MobRemoveCommand());
         subCommands.add(new MobSetHealthCommand());
         subCommands.add(new MobSetItemCommand());
-        subCommands.add(new MobRebalanceCommand());
+        subCommands.add(new MobSetNameCommand());
+        subCommands.add(new MobSpawnCommand());
     }
 
     @Override
     public String getName() { return "mob"; }
+
     @Override
-    public String getDescription() { return "Manages mobs within a farm."; }
+    public String getDescription() { return "Manages mobs within a farm or templates."; }
+
     @Override
-    public String getSyntax() { return "/of mob <list|add|remove> ..."; }
+    public String getSyntax() { return "/of mob <subcommand> [...]"; }
 
     @Override
     public void perform(Player player, String[] args) {

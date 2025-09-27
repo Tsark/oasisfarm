@@ -9,8 +9,10 @@ import org.bukkit.entity.Player;
 public class MobRebalanceCommand extends MobSubCommand {
     @Override
     public String getName() { return "rebalance"; }
+
     @Override
-    public String getDescription() { return "Auto-rebalances spawn chances to total 100%."; }
+    public String getDescription() { return "Auto-rebalances a farm's spawn chances to total 100%."; }
+
     @Override
     public String getSyntax() { return "/of mob rebalance <farm_name>"; }
 
@@ -36,7 +38,7 @@ public class MobRebalanceCommand extends MobSubCommand {
         }
 
         double totalChance = mobsSection.getKeys(false).stream()
-                .mapToDouble(key -> mobsSection.getDouble(key + ".spawn-chance"))
+                .mapToDouble(mobsSection::getDouble)
                 .sum();
 
         if (totalChance == 0) {
@@ -45,13 +47,13 @@ public class MobRebalanceCommand extends MobSubCommand {
         }
 
         for (String mobKey : mobsSection.getKeys(false)) {
-            double currentChance = mobsSection.getDouble(mobKey + ".spawn-chance");
+            double currentChance = mobsSection.getDouble(mobKey);
             double newChance = currentChance / totalChance; // Normalize to 1.0 total
-            mobsSection.set(mobKey + ".spawn-chance", newChance);
+            mobsSection.set(mobKey, newChance);
         }
 
         plugin.saveConfig();
-        plugin.getConfigManager().loadFarms();
+        plugin.getConfigManager().loadAllConfigs();
         player.sendMessage(ChatColor.GREEN + "Spawn chances for '" + farmId + "' have been rebalanced to total 100%.");
         player.sendMessage(ChatColor.YELLOW + "Run '/of mob list " + farmId + "' to see the new chances.");
     }

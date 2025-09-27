@@ -9,8 +9,10 @@ import java.util.stream.Collectors;
 public class MobSetNameCommand extends MobSubCommand {
     @Override
     public String getName() { return "setname"; }
+
     @Override
     public String getDescription() { return "Sets the display name of a mob template."; }
+
     @Override
     public String getSyntax() { return "/of mob setname <template_id> <name...>"; }
 
@@ -33,8 +35,8 @@ public class MobSetNameCommand extends MobSubCommand {
         }
 
         mobTemplatesConfig.set(path + ".display-name", name);
-        plugin.getConfigManager().saveMobTemplatesConfig(); // Save the file
-        plugin.getConfigManager().loadAllConfigs(); // Reload all changes
+        plugin.getConfigManager().saveMobTemplatesConfig();
+        plugin.getConfigManager().loadAllConfigs();
 
         String coloredName = ChatColor.translateAlternateColorCodes('&', name);
         player.sendMessage(ChatColor.GREEN + "Set display name for template '" + templateId + "' to: " + coloredName);

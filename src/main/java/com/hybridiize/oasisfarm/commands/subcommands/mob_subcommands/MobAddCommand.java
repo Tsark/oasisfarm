@@ -2,16 +2,17 @@ package com.hybridiize.oasisfarm.commands.subcommands.mob_subcommands;
 
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
 public class MobAddCommand extends MobSubCommand {
     @Override
     public String getName() { return "add"; }
+
     @Override
-    public String getDescription() { return "Adds a new mob type to a farm."; }
+    public String getDescription() { return "Adds a mob template to a farm's spawn list."; }
+
     @Override
-    public String getSyntax() { return "/of mob add <farm_name> <mob_type> <chance>"; }
+    public String getSyntax() { return "/of mob add <farm_name> <template_id> <chance>"; }
 
     @Override
     public void perform(Player player, String[] args) {
@@ -21,10 +22,9 @@ public class MobAddCommand extends MobSubCommand {
         }
 
         String farmId = args[2];
-        String templateId = args[3]; // We now use a template ID
+        String templateId = args[3];
         double chance;
 
-        // NEW: Check if the template exists
         if (plugin.getConfigManager().getMobTemplate(templateId) == null) {
             player.sendMessage(ChatColor.RED + "The mob template '" + templateId + "' does not exist in mob-templates.yml.");
             return;
@@ -49,13 +49,12 @@ public class MobAddCommand extends MobSubCommand {
             return;
         }
 
-        // New, simpler config setting
         String mobPath = farmPath + ".mobs." + templateId;
         config.set(mobPath, chance);
 
         plugin.saveConfig();
-        plugin.getConfigManager().loadAllConfigs(); // Use the new all-encompassing loader
+        plugin.getConfigManager().loadAllConfigs();
         player.sendMessage(ChatColor.GREEN + "Added " + templateId + " to farm " + farmId + " with a " + (chance * 100) + "% chance.");
-// ...
+        player.sendMessage(ChatColor.YELLOW + "You may want to run '/of mob rebalance " + farmId + "' to ensure chances total 100%.");
     }
 }

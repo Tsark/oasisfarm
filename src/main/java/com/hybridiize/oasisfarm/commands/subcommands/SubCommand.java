@@ -5,17 +5,27 @@ import org.bukkit.entity.Player;
 
 public abstract class SubCommand {
 
-    protected Oasisfarm plugin = Oasisfarm.getInstance();
+    protected final Oasisfarm plugin = Oasisfarm.getInstance();
 
-    // The name of the sub-command (e.g., "wand", "list")
+    /**
+     * @return The name of the sub-command (e.g., "create", "list")
+     */
     public abstract String getName();
 
-    // A brief description of what it does
+    /**
+     * @return A brief description of what the command does for the help message.
+     */
     public abstract String getDescription();
 
-    // The syntax for the command (e.g., "/of create <name>")
+    /**
+     * @return The correct command syntax for the help message (e.g., "/of create <name>").
+     */
     public abstract String getSyntax();
 
-    // The code that runs when the command is executed
+    /**
+     * The code that is executed when the command is run.
+     * @param player The player who ran the command.
+     * @param args The command arguments passed to the command.
+     */
     public abstract void perform(Player player, String[] args);
 }

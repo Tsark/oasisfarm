@@ -6,8 +6,10 @@ import org.bukkit.entity.Player;
 public class ReloadCommand extends SubCommand {
     @Override
     public String getName() { return "reload"; }
+
     @Override
-    public String getDescription() { return "Reloads the plugin configuration."; }
+    public String getDescription() { return "Reloads all plugin configuration files."; }
+
     @Override
     public String getSyntax() { return "/of reload"; }
 
@@ -15,6 +17,6 @@ public class ReloadCommand extends SubCommand {
     public void perform(Player player, String[] args) {
         plugin.getHologramManager().removeAllHolograms();
         plugin.getConfigManager().loadAllConfigs();
-        player.sendMessage(ChatColor.GREEN + "OasisFarm configuration reloaded!");
+        player.sendMessage(ChatColor.GREEN + "OasisFarm configuration files reloaded!");
     }
 }
