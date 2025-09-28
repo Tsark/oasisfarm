@@ -8,10 +8,10 @@ public class EventStopCommand extends EventSubCommand {
     public String getName() { return "stop"; }
 
     @Override
-    public String getDescription() { return "Manually stops a running event."; }
+    public String getDescription() { return "Manually stops the event running in a specific farm."; }
 
     @Override
-    public String getSyntax() { return "/of event stop <event_id>"; }
+    public String getSyntax() { return "/of event stop <farm_id>"; }
 
     @Override
     public void perform(Player player, String[] args) {
@@ -19,14 +19,16 @@ public class EventStopCommand extends EventSubCommand {
             player.sendMessage(ChatColor.RED + "Usage: " + getSyntax());
             return;
         }
-        String eventId = args[2];
+        String farmId = args[2];
 
-        if (!plugin.getEventManager().isEventRunning(eventId)) {
-            player.sendMessage(ChatColor.RED + "Event '" + eventId + "' is not currently running.");
+        // 1. Check if an event is running in the farm
+        if (!plugin.getEventManager().isFarmRunningEvent(farmId)) {
+            player.sendMessage(ChatColor.RED + "No event is currently running in the farm '" + farmId + "'.");
             return;
         }
 
-        plugin.getEventManager().endEvent(eventId);
-        player.sendMessage(ChatColor.GREEN + "Manually stopped event: " + eventId);
+        // 2. Stop the event (we will add the stopEventInFarm method next)
+        plugin.getEventManager().stopEventInFarm(farmId);
+        player.sendMessage(ChatColor.GREEN + "Manually stopped the event in farm: " + farmId);
     }
 }

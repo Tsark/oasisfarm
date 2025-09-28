@@ -1,292 +1,223 @@
 package com.hybridiize.oasisfarm.managers;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
-import com.hybridiize.oasisfarm.event.ActiveEventTracker;
-import com.hybridiize.oasisfarm.event.EventCondition;
-import com.hybridiize.oasisfarm.event.EventPhase;
-import com.hybridiize.oasisfarm.event.OasisEvent;
+import com.hybridiize.oasisfarm.event.v2.ActiveEventTrackerV2;
+import com.hybridiize.oasisfarm.event.v2.OasisEventV2;
 import com.hybridiize.oasisfarm.farm.Farm;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.World;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.checkerframework.common.returnsreceiver.qual.This;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
-import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.ChatColor;
 
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class EventManager {
 
     private final Oasisfarm plugin;
-    // Map<EventID, CooldownEndTimeMillis>
-    private final Map<String, Long> eventCooldowns = new ConcurrentHashMap<>();
-    // Map<FarmID, ActiveEventID>
-    private final Map<String, String> activeFarmEvents = new ConcurrentHashMap<>();
-    // Map<EventID, ActiveEventTracker>
-    private final Map<String, ActiveEventTracker> runningEventInstances = new ConcurrentHashMap<>();
-    // Map<EventID, BossBar>
-    private final Map<String, BossBar> eventBossBars = new ConcurrentHashMap<>();
+    // Map<FarmID, ActiveEventTrackerV2> - Now tracks events on a per-farm basis.
+    private final Map<String, ActiveEventTrackerV2> activeFarmEvents = new ConcurrentHashMap<>();
+    private final Map<String, BossBar> activeBossBars = new ConcurrentHashMap<>();
 
     public EventManager(Oasisfarm plugin) {
         this.plugin = plugin;
         startEventTicker();
-        startPhaseTicker();
+        startBossBarTicker();
+    }
+    private void startBossBarTicker() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (activeBossBars.isEmpty()) return;
+
+                for (Map.Entry<String, ActiveEventTrackerV2> entry : activeFarmEvents.entrySet()) {
+                    String farmId = entry.getKey();
+                    ActiveEventTrackerV2 tracker = entry.getValue();
+                    BossBar bar = activeBossBars.get(farmId);
+
+                    if (bar != null && tracker.getCurrentPhase() != null) {
+                        String eventName = tracker.getEvent().getId().replace("_", " ");
+                        String phaseName = tracker.getCurrentPhase().getPhaseId().replace("_", " ");
+
+                        // We will add a timer back in a future update if needed.
+                        String title = String.format("&c&l%s &7- &e%s", eventName, phaseName);
+                        bar.setTitle(ChatColor.translateAlternateColorCodes('&', title));
+                    }
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 20L); // Update every second
+    }
+
+    public Map<String, BossBar> getActiveBossBars() {
+        return java.util.Collections.unmodifiableMap(activeBossBars);
     }
 
     private void startEventTicker() {
-        long interval = plugin.getConfigManager().getEventsConfig().getLong("event-check-interval", 1200L);
         new BukkitRunnable() {
             @Override
             public void run() {
-                checkForTriggerableEvents();
-            }
-        }.runTaskTimer(plugin, 20L * 15, interval);
-    }
-
-    private void startPhaseTicker() {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (runningEventInstances.isEmpty()) return;
-                for (ActiveEventTracker tracker : new java.util.ArrayList<>(runningEventInstances.values())) {
-                    if (tracker.isPhaseOver()) {
-                        advanceEventPhase(tracker);
+                // The new ticker is farm-centric
+                for (Farm farm : plugin.getConfigManager().getFarms().values()) {
+                    if (activeFarmEvents.containsKey(farm.getId())) {
+                        // If farm has an event, check if it should advance to the next phase
+                        checkPhaseProgression(activeFarmEvents.get(farm.getId()));
+                    } else {
+                        // If farm has no event, check if a new one should start
+                        checkForTriggerableEvents(farm);
                     }
                 }
-                updateBossBars();
             }
-        }.runTaskTimer(plugin, 20L, 20L);
+        }.runTaskTimer(plugin, 20L * 5, 20L * 5); // Check every 5 seconds
     }
 
-    private void checkForTriggerableEvents() {
-        Map<String, OasisEvent> allEvents = plugin.getConfigManager().getEvents();
-        for (OasisEvent event : allEvents.values()) {
-            if (isEventRunning(event.getId())) continue;
-
-            long currentTime = System.currentTimeMillis();
-            if (eventCooldowns.getOrDefault(event.getId(), 0L) > currentTime) {
-                continue;
-            }
-
-            if (areConditionsMet(event)) {
-                startEvent(event);
-                break;
+    private void checkForTriggerableEvents(Farm farm) {
+        // This code will now work!
+        List<String> possibleEventIds = plugin.getConfigManager().getPossibleEventsForFarm(farm.getId());
+        for (String eventId : possibleEventIds) {
+            OasisEventV2 event = plugin.getConfigManager().getEventV2(eventId);
+            if (event != null) {
+                boolean triggered = plugin.getConditionManager().areConditionsMet(event.getTrigger().getConditions(), event.getTrigger().getMode(), farm);
+                if (triggered) {
+                    startEvent(event, farm);
+                    break; // Start only one event per check
+                }
             }
         }
     }
 
-    private boolean areConditionsMet(OasisEvent event) {
-        for (EventCondition condition : event.getConditions()) {
-            switch (condition.getType().toUpperCase()) {
-                case "MIN_PLAYERS":
-                    int minPlayers = Integer.parseInt(condition.getValue());
-                    if (Bukkit.getOnlinePlayers().size() < minPlayers) return false;
-                    break;
-                case "TIME_OF_DAY":
-                    World farmWorld = getEventWorld(event);
-                    if (farmWorld == null) return false;
-                    long time = farmWorld.getTime();
-                    String requiredTime = condition.getValue().toUpperCase();
-                    boolean isDay = time >= 0 && time < 12300;
-                    boolean isNight = time >= 12300 && time < 23850;
-                    if (requiredTime.equals("DAY") && !isDay) return false;
-                    if (requiredTime.equals("NIGHT") && !isNight) return false;
-                    break;
-                case "TOTAL_KILLS_IN_FARM":
-                    int requiredKills = Integer.parseInt(condition.getValue());
-                    String farmId = event.getTargetFarm();
-                    if (farmId.equalsIgnoreCase("all")) {
-                        plugin.getLogger().warning("TOTAL_KILLS_IN_FARM cannot be used with 'target-farm: all' for event '" + event.getId() + "'. Condition ignored.");
-                        break;
-                    }
-                    int currentKills = plugin.getFarmDataManager().getKillCount(farmId);
-                    if (currentKills < requiredKills) return false;
-                    break;
-                case "INTERVAL":
-                    long intervalSeconds = Long.parseLong(condition.getValue());
-                    long lastRanTimestamp = plugin.getEventDataManager().getLastRan(event.getId());
-                    if (lastRanTimestamp == 0) break;
-                    if (System.currentTimeMillis() - lastRanTimestamp < intervalSeconds * 1000L) return false;
-                    break;
-                default:
-                    plugin.getLogger().warning("Unknown event condition type: " + condition.getType());
-                    break;
-            }
-        }
-        return true;
-    }
-
-    public void startEvent(OasisEvent event) {
-        if (isEventRunning(event.getId())) return;
-
-        for (EventCondition condition : event.getConditions()) {
-            if (condition.getType().equalsIgnoreCase("INTERVAL")) {
-                plugin.getEventDataManager().setLastRan(event.getId(), System.currentTimeMillis());
-                break;
-            }
-        }
-
-        plugin.getLogger().info("Starting event: " + event.getId());
-        ActiveEventTracker tracker = new ActiveEventTracker(event);
-        runningEventInstances.put(event.getId(), tracker);
-
-        if (event.getTargetFarm().equalsIgnoreCase("all")) {
-            for (String farmId : plugin.getConfigManager().getFarms().keySet()) {
-                activeFarmEvents.put(farmId, event.getId());
-            }
-        } else {
-            activeFarmEvents.put(event.getTargetFarm(), event.getId());
-        }
-        advanceEventPhase(tracker);
-    }
-
-    private void advanceEventPhase(ActiveEventTracker tracker) {
-        EventPhase endedPhase = tracker.getCurrentPhase();
-        if (endedPhase != null && endedPhase.getOnEndCommands() != null) {
-            for (String command : endedPhase.getOnEndCommands()) {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), ChatColor.translateAlternateColorCodes('&', command));
-            }
-        }
-
-        EventPhase nextPhase = tracker.advanceToNextPhase();
-        if (nextPhase == null) {
-            endEvent(tracker.getEvent().getId());
+    private void checkPhaseProgression(ActiveEventTrackerV2 tracker) {
+        if (tracker.hasEnded()) {
+            endEvent(tracker);
             return;
         }
 
-        BossBar bar = eventBossBars.get(tracker.getEvent().getId());
-        if (bar == null) {
-            bar = Bukkit.createBossBar("Event Starting...", BarColor.RED, BarStyle.SOLID);
-            bar.setVisible(true);
-            eventBossBars.put(tracker.getEvent().getId(), bar);
+        // Get the current phase's progression rules
+        com.hybridiize.oasisfarm.event.v2.PhaseProgression progression = tracker.getCurrentPhase().getProgression();
+        if (progression == null || progression.getConditions().isEmpty()) {
+            return; // This phase has no way to end, it's a "forever" phase until stopped manually.
         }
 
-        if (nextPhase.getOnStartCommands() != null) {
-            for (String command : nextPhase.getOnStartCommands()) {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), ChatColor.translateAlternateColorCodes('&', command));
-            }
-        }
-    }
+        // Ask the ConditionManager if it's time to advance
+        boolean shouldAdvance = plugin.getConditionManager().areConditionsMet(progression.getConditions(), progression.getMode(), tracker.getFarm());
 
-    private void updateBossBars() {
-        for (ActiveEventTracker tracker : runningEventInstances.values()) {
-            BossBar bar = eventBossBars.get(tracker.getEvent().getId());
-            EventPhase phase = tracker.getCurrentPhase();
-            if (bar != null && phase != null) {
-                long timeLeft = tracker.getPhaseEndTime() - System.currentTimeMillis();
-                double progress = Math.max(0, (double) timeLeft / (phase.getDuration() * 1000.0));
-                bar.setProgress(progress);
-
-                String title = String.format("&c&l%s &7- &ePhase %d &7- &fTime Left: %ds",
-                        tracker.getEvent().getId().replace("_", " "),
-                        tracker.getCurrentPhaseIndex() + 1,
-                        timeLeft / 1000);
-                bar.setTitle(ChatColor.translateAlternateColorCodes('&', title));
-            }
+        if (shouldAdvance) {
+            advanceEventPhase(tracker);
         }
     }
 
-    public void endEvent(String eventId) {
-        endEvent(eventId, false);
+    public void startEvent(OasisEventV2 event, Farm farm) {
+        plugin.getLogger().info("Starting event '" + event.getId() + "' in farm '" + farm.getId() + "'!");
+        ActiveEventTrackerV2 tracker = new ActiveEventTrackerV2(event, farm);
+        activeFarmEvents.put(farm.getId(), tracker);
+        advanceEventPhase(tracker);
+        BossBar bar = Bukkit.createBossBar("Event Starting...", BarColor.RED, BarStyle.SOLID);
+        bar.setVisible(true);
+        activeBossBars.put(farm.getId(), bar);
     }
 
-    private void endEvent(String eventId, boolean silent) {
-        if (!isEventRunning(eventId)) return;
-        OasisEvent event = runningEventInstances.get(eventId).getEvent();
-        if (event == null) return;
-
-        String farmId = event.getTargetFarm();
-        if (!farmId.equalsIgnoreCase("all")) {
-            for (EventCondition condition : event.getConditions()) {
-                if (condition.getType().equalsIgnoreCase("TOTAL_KILLS_IN_FARM")) {
-                    plugin.getFarmDataManager().resetKillCount(farmId);
-                    if (!silent) {
-                        plugin.getLogger().info("Resetting TOTAL_KILLS_IN_FARM for farm '" + farmId + "'.");
-                    }
-                    break;
-                }
-            }
-        }
-
-        if (!silent && event.getOnEndCommands() != null) {
-            for (String command : event.getOnEndCommands()) {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), ChatColor.translateAlternateColorCodes('&', command));
-            }
-        }
-
-        if (!silent) {
-            plugin.getLogger().info("Ending event: " + event.getId());
-        }
-
-        runningEventInstances.remove(eventId);
-        activeFarmEvents.values().removeIf(id -> id.equals(eventId));
-
-        BossBar bar = eventBossBars.remove(eventId);
-        if (bar != null) {
-            bar.setVisible(false);
-            bar.removeAll();
-        }
-
-        long cooldownMillis = event.getCooldown() * 1000L;
-        eventCooldowns.put(eventId, System.currentTimeMillis() + cooldownMillis);
-    }
-
-    public void stopAllEvents() {
-        for (String eventId : new java.util.HashSet<>(runningEventInstances.keySet())) {
-            endEvent(eventId, true);
-        }
-    }
-
-    // --- HELPER METHODS FOR OTHER CLASSES ---
-
-    public boolean isEventActive(String farmId) {
+    /**
+     * Checks if a specific farm currently has an active V2 event.
+     * @param farmId The ID of the farm to check.
+     * @return True if an event is running in the farm, false otherwise.
+     */
+    public boolean isFarmRunningEvent(String farmId) {
         return activeFarmEvents.containsKey(farmId);
     }
 
-    public EventPhase getCurrentPhase(String farmId) {
-        String eventId = activeFarmEvents.get(farmId);
-        if (eventId == null) return null;
-        ActiveEventTracker tracker = runningEventInstances.get(eventId);
-        if (tracker == null) return null;
-        return tracker.getCurrentPhase();
+    /**
+     * Gets an unmodifiable view of the currently active farm events.
+     * @return A map where the key is the Farm ID and the value is the event tracker.
+     */
+    public Map<String, com.hybridiize.oasisfarm.event.v2.ActiveEventTrackerV2> getActiveFarmEvents() {
+        return java.util.Collections.unmodifiableMap(activeFarmEvents);
     }
 
-    private World getEventWorld(OasisEvent event) {
-        if (event.getTargetFarm().equalsIgnoreCase("all")) {
-            return Bukkit.getWorlds().get(0);
-        } else {
-            Farm farm = plugin.getConfigManager().getFarms().get(event.getTargetFarm());
-            if (farm == null) return null;
-            return farm.getRegion().getPos1().getWorld();
+    private void advanceEventPhase(ActiveEventTrackerV2 tracker) {
+        // Execute end-of-phase actions if this is not the first phase
+        if (tracker.getCurrentPhase() != null) {
+            // We will implement "on-end" actions later if needed.
+        }
+
+        // Advance to the next phase
+        com.hybridiize.oasisfarm.event.v2.EventPhaseV2 nextPhase = tracker.advanceToNextPhase();
+
+        if (nextPhase == null) {
+            endEvent(tracker);
+            return;
+        }
+
+        plugin.getLogger().info("Event '" + tracker.getEvent().getId() + "' in farm '" + tracker.getFarm().getId() + "' advancing to phase '" + nextPhase.getPhaseId() + "'.");
+
+        // Execute the actions for the new phase
+        // This part needs to be built in Step 4.
+        executePhaseActions(nextPhase.getActions(), tracker.getFarm());
+    }
+
+    private void endEvent(ActiveEventTrackerV2 tracker) {
+        plugin.getLogger().info("Event '" + tracker.getEvent().getId() + "' has ended in farm '" + tracker.getFarm().getId() + "'.");
+        activeFarmEvents.remove(tracker.getFarm().getId());
+        BossBar bar = activeBossBars.remove(tracker.getFarm().getId());
+        if (bar != null) {
+            bar.setVisible(false);
+            bar.removeAll(); // Clear all players from the bar
         }
     }
 
-    public boolean isEventRunning(String eventId) {
-        return runningEventInstances.containsKey(eventId);
-    }
+    // In EventManager.java
 
-    public Map<String, OasisEvent> getRunningEvents() {
-        Map<String, OasisEvent> events = new HashMap<>();
-        for (ActiveEventTracker tracker : runningEventInstances.values()) {
-            events.put(tracker.getEvent().getId(), tracker.getEvent());
+    /**
+     * Manually stops an event running in a specific farm.
+     * @param farmId The ID of the farm where the event should be stopped.
+     */
+    public void stopEventInFarm(String farmId) {
+        ActiveEventTrackerV2 tracker = activeFarmEvents.get(farmId);
+        if (tracker != null) {
+            endEvent(tracker);
         }
-        return events;
     }
 
-    public BossBar getBossBar(String eventId) {
-        return eventBossBars.get(eventId);
+    public void stopAllEvents() {
+        if (activeFarmEvents.isEmpty()) {
+            return;
+        }
+
+        plugin.getLogger().info("Stopping all active OasisFarm events...");
+        // Create a copy of the trackers to avoid issues while modifying the map
+        java.util.Collection<com.hybridiize.oasisfarm.event.v2.ActiveEventTrackerV2> trackers = new java.util.ArrayList<>(activeFarmEvents.values());
+
+        for (com.hybridiize.oasisfarm.event.v2.ActiveEventTrackerV2 tracker : trackers) {
+            endEvent(tracker);
+        }
+        plugin.getLogger().info("All events have been stopped.");
     }
 
-    public Map<String, Long> getEventCooldowns() {
-        return eventCooldowns;
+    // In EventManager.java
+    private void executePhaseActions(java.util.List<com.hybridiize.oasisfarm.event.v2.PhaseAction> actions, Farm farm) {
+        if (actions == null) return;
+
+        for (com.hybridiize.oasisfarm.event.v2.PhaseAction action : actions) {
+            if (action instanceof com.hybridiize.oasisfarm.event.v2.action.BroadcastAction) {
+                com.hybridiize.oasisfarm.event.v2.action.BroadcastAction broadcastAction = (com.hybridiize.oasisfarm.event.v2.action.BroadcastAction) action;
+                Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', broadcastAction.getMessage()));
+
+            } else if (action instanceof com.hybridiize.oasisfarm.event.v2.action.CommandAction) {
+                com.hybridiize.oasisfarm.event.v2.action.CommandAction commandAction = (com.hybridiize.oasisfarm.event.v2.action.CommandAction) action;
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), commandAction.getCommand());
+
+            } else if (action instanceof com.hybridiize.oasisfarm.event.v2.action.SpawnOnceAction) {
+                com.hybridiize.oasisfarm.event.v2.action.SpawnOnceAction spawnOnceAction = (com.hybridiize.oasisfarm.event.v2.action.SpawnOnceAction) action;
+                for (Map<String, Object> mobData : spawnOnceAction.getMobsToSpawn()) {
+                    String mobId = (String) mobData.get("mob_id");
+                    int amount = (int) mobData.get("amount");
+                    plugin.getFarmManager().spawnSpecificMob(farm, mobId, amount);
+                }
+            }
+        }
     }
 
-    public Map<String, String> getActiveFarmEvents() {
-        return Collections.unmodifiableMap(activeFarmEvents);
-    }
 }

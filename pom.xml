@@ -6,7 +6,7 @@
 
     <groupId>com.hybridiize</groupId>
     <artifactId>oasisfarm</artifactId>
-    <version>4.6.1</version>
+    <version>4.7.0</version>
     <packaging>jar</packaging>
 
     <name>OasisFarm</name>
@@ -76,6 +76,7 @@
             <name>Lumine Releases</name>
             <url>https://mvn.lumine.io/repository/maven-public/</url>
         </repository>
+
     </repositories>
 
     <dependencies>
@@ -99,18 +100,18 @@
             <version>2.9.7</version>
             <scope>provided</scope>
         </dependency>
-        <!-- Vault API -->
-        <dependency>
-            <groupId>net.milkbowl.vault</groupId>
-            <artifactId>VaultAPI</artifactId>
-            <version>1.7</version>
-            <scope>provided</scope>
-        </dependency>
         <dependency>
             <groupId>io.lumine</groupId>
             <artifactId>Mythic-Dist</artifactId>
             <version>5.6.1</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>net.milkbowl.vault</groupId>
+            <artifactId>VaultAPI</artifactId>
+            <version>1.7</version>
+            <scope>provided</scope>
+        </dependency>
+
     </dependencies>
 </project>

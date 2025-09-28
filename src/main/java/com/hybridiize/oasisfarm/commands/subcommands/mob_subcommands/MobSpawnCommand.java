@@ -1,6 +1,8 @@
 package com.hybridiize.oasisfarm.commands.subcommands.mob_subcommands;
 
 import com.hybridiize.oasisfarm.farm.MobInfo;
+import io.lumine.mythic.api.mobs.MythicMob;
+import io.lumine.mythic.bukkit.BukkitAdapter;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.LivingEntity;
@@ -8,6 +10,8 @@ import org.bukkit.entity.Player;
 import io.lumine.mythic.api.MythicProvider;
 import io.lumine.mythic.api.exceptions.InvalidMobTypeException;
 import org.bukkit.entity.Entity;
+
+import java.util.Optional;
 
 public class MobSpawnCommand extends MobSubCommand {
     @Override
@@ -40,12 +44,19 @@ public class MobSpawnCommand extends MobSubCommand {
         // --- NEW SPAWNING LOGIC BRANCH ---
         if (plugin.isMythicMobsEnabled() && mobInfo.getMobType().equals("MYTHIC")) {
             try {
-                Entity entity = MythicProvider.get().getAPIHelper().spawnMythicMob(mobInfo.getMythicId(), spawnLocation, mobInfo.getMythicLevel());
-                if (entity instanceof LivingEntity) {
-                    spawnedMob = (LivingEntity) entity;
+                Optional<MythicMob> mythicMob = MythicProvider.get().getMobManager().getMythicMob(mobInfo.getMythicId());
+                if (mythicMob.isPresent()) {
+                    Entity entity = mythicMob.get().spawn(BukkitAdapter.adapt(spawnLocation), mobInfo.getMythicLevel()).getEntity().getBukkitEntity();
+                    if (entity instanceof LivingEntity) {
+                        spawnedMob = (LivingEntity) entity;
+                    }
+                } else {
+                    player.sendMessage(ChatColor.RED + "Failed to spawn Mythic Mob. Is the ID '" + mobInfo.getMythicId() + "' correct?");
+                    return;
                 }
-            } catch (InvalidMobTypeException e) {
-                player.sendMessage(ChatColor.RED + "Failed to spawn Mythic Mob. Is the ID '" + mobInfo.getMythicId() + "' correct?");
+            } catch (Exception e) {
+                player.sendMessage(ChatColor.RED + "An unexpected error occurred while spawning the Mythic Mob.");
+                e.printStackTrace(); // This helps show errors in the console
                 return;
             }
         } else {

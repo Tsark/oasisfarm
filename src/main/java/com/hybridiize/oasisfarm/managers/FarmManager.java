@@ -1,11 +1,15 @@
 package com.hybridiize.oasisfarm.managers;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
-import com.hybridiize.oasisfarm.event.EventPhase;
 import com.hybridiize.oasisfarm.farm.Farm;
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.Region;
 import com.hybridiize.oasisfarm.farm.TrackedMob;
+import io.lumine.mythic.api.MythicProvider;
+import io.lumine.mythic.api.adapters.AbstractLocation;
+import io.lumine.mythic.api.mobs.MobManager;
+import io.lumine.mythic.api.mobs.MythicMob;
+import io.lumine.mythic.bukkit.BukkitAdapter; // Modern API requires this for location conversion
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -19,16 +23,10 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
-import io.lumine.mythic.api.Mythic;
-import io.lumine.mythic.api.exceptions.InvalidMobTypeException;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.logging.Level;
 
 public class FarmManager {
 
@@ -48,79 +46,38 @@ public class FarmManager {
                     processFarm(farm);
                 }
             }
-        }.runTaskTimer(plugin, 0L, 20L); // Check every second
+        }.runTaskTimer(plugin, 0L, 20L);
     }
 
     private void processFarm(Farm farm) {
-        EventManager eventManager = plugin.getEventManager();
-        EventPhase currentPhase = eventManager.isEventActive(farm.getId()) ? eventManager.getCurrentPhase(farm.getId()) : null;
-
-        double spawnIntervalModifier = 1.0;
-        int maxMobs = farm.getMaxMobs();
-
-        if (currentPhase != null) {
-            spawnIntervalModifier = currentPhase.getSpawnIntervalModifier();
-            if (currentPhase.getMaxMobsOverride() > -1) {
-                maxMobs = currentPhase.getMaxMobsOverride();
-            }
-        }
-
         long baseInterval = plugin.getConfig().getLong("farm-check-interval", 100L);
-        long effectiveInterval = (long) (baseInterval * spawnIntervalModifier);
-
-        if (System.currentTimeMillis() - farm.getLastSpawnTick() < effectiveInterval * 50) {
+        if (System.currentTimeMillis() - farm.getLastSpawnTick() < baseInterval * 50) {
             return;
         }
         farm.setLastSpawnTick(System.currentTimeMillis());
 
         Region region = farm.getRegion();
         World world = region.getPos1().getWorld();
-
-        if (!world.isChunkLoaded(region.getPos1().getBlockX() >> 4, region.getPos1().getBlockZ() >> 4) &&
-                !world.isChunkLoaded(region.getPos2().getBlockX() >> 4, region.getPos2().getBlockZ() >> 4)) {
+        if (world == null || (!world.isChunkLoaded(region.getPos1().getBlockX() >> 4, region.getPos1().getBlockZ() >> 4) && !world.isChunkLoaded(region.getPos2().getBlockX() >> 4, region.getPos2().getBlockZ() >> 4))) {
             return;
         }
-
-        // Mob Confinement logic has been removed as requested.
 
         trackedMobs.keySet().removeIf(uuid -> Bukkit.getEntity(uuid) == null || Bukkit.getEntity(uuid).isDead());
-
-        long currentMobCount = trackedMobs.values().stream()
-                .filter(trackedMob -> trackedMob.getFarmId().equals(farm.getId()))
-                .count();
-
+        long currentMobCount = trackedMobs.values().stream().filter(trackedMob -> trackedMob.getFarmId().equals(farm.getId())).count();
         plugin.getHologramManager().createOrUpdateFarmHologram(farm, (int) currentMobCount);
 
-        int mobsToSpawn = maxMobs - (int) currentMobCount;
-        if (mobsToSpawn <= 0) {
-            return;
+        if (farm.getMaxMobs() - currentMobCount > 0) {
+            spawnMobInFarm(farm);
         }
-
-        spawnMobInFarm(farm);
     }
 
     private void spawnMobInFarm(Farm farm) {
         Map<String, Double> mobs = farm.getMobs();
-        EventManager eventManager = plugin.getEventManager();
-        EventPhase currentPhase = eventManager.isEventActive(farm.getId()) ? eventManager.getCurrentPhase(farm.getId()) : null;
-
-        if (currentPhase != null) {
-            if (currentPhase.getSetMobs() != null && !currentPhase.getSetMobs().isEmpty()) {
-                mobs = currentPhase.getSetMobs();
-            } else if (currentPhase.getAddMobs() != null && !currentPhase.getAddMobs().isEmpty()) {
-                mobs = new HashMap<>(mobs);
-                mobs.putAll(currentPhase.getAddMobs());
-            }
-        }
-
-        if (mobs.isEmpty()) {
-            return;
-        }
+        if (mobs.isEmpty()) return;
 
         double roll = ThreadLocalRandom.current().nextDouble();
         double cumulativeChance = 0.0;
         String chosenTemplateId = null;
-
         for (Map.Entry<String, Double> entry : mobs.entrySet()) {
             cumulativeChance += entry.getValue();
             if (roll <= cumulativeChance) {
@@ -128,11 +85,9 @@ public class FarmManager {
                 break;
             }
         }
-
         if (chosenTemplateId == null && !mobs.isEmpty()) {
             chosenTemplateId = new ArrayList<>(mobs.keySet()).get(0);
         }
-
         if (chosenTemplateId == null) return;
 
         MobInfo mobToSpawnInfo = plugin.getConfigManager().getMobTemplate(chosenTemplateId);
@@ -151,32 +106,33 @@ public class FarmManager {
                     Location spawnLocation = getRandomLocationInRegion(farm.getRegion());
                     if (isSafeLocation(spawnLocation)) {
                         if (!spawnLocation.getChunk().isLoaded()) return;
-                        LivingEntity spawnedMob = null;
 
-                        // Check if MythicMobs integration is enabled AND the template is a Mythic type.
-                        if (plugin.isMythicMobsEnabled() && finalMobToSpawnInfo.getMobType().equals("MYTHIC")) {
+                        if (plugin.isMythicMobsEnabled() && "MYTHIC".equals(finalMobToSpawnInfo.getMobType())) {
                             try {
-                                // Use the MythicMobs API to spawn the mob
-                                Entity entity = Mythic.get().spawnMythicMob(finalMobToSpawnInfo.getMythicId(), spawnLocation, finalMobToSpawnInfo.getMythicLevel());
-                                if (entity instanceof LivingEntity) {
-                                    spawnedMob = (LivingEntity) entity;
+                                MobManager mobManager = MythicProvider.get().getMobManager();
+                                Optional<MythicMob> mythicMobOptional = mobManager.getMythicMob(finalMobToSpawnInfo.getMythicId());
+                                if (mythicMobOptional.isPresent()) {
+                                    MythicMob mythicMob = mythicMobOptional.get();
+
+                                    // This is the correct, modern way to convert a Bukkit Location
+                                    AbstractLocation mythicLocation = BukkitAdapter.adapt(spawnLocation);
+
+                                    // Spawn the mob and capture the result to track it
+                                    io.lumine.mythic.core.mobs.ActiveMob activeMob = mythicMob.spawn(mythicLocation, finalMobToSpawnInfo.getMythicLevel());
+
+                                    if (activeMob != null && activeMob.getEntity().getBukkitEntity() instanceof LivingEntity) {
+                                        trackMob((LivingEntity) activeMob.getEntity().getBukkitEntity(), farm.getId(), finalMobToSpawnInfo.getTemplateId());
+                                    }
+                                } else {
+                                    plugin.getLogger().warning("Attempted to spawn Mythic Mob '" + finalMobToSpawnInfo.getMythicId() + "' but it was not found.");
                                 }
-                            } catch (InvalidMobTypeException e) {
-                                plugin.getLogger().severe("Attempted to spawn a Mythic Mob with an invalid ID: " + finalMobToSpawnInfo.getMythicId());
+                            } catch (Exception e) {
+                                plugin.getLogger().log(Level.SEVERE, "An unexpected error occurred while spawning Mythic Mob '" + finalMobToSpawnInfo.getMythicId() + "'", e);
                             }
                         } else {
-                            // Fallback to vanilla spawning if MythicMobs is off or mob-type is VANILLA
-                            spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, finalMobToSpawnInfo.getType());
-                        }
-
-                        // If a mob was successfully spawned (either vanilla or mythic)...
-                        if (spawnedMob != null) {
-                            trackMob(spawnedMob, farm.getId(), finalMobToSpawnInfo.getTemplateId());
-
-                            // For VANILLA mobs, we apply our own custom attributes.
-                            // For MYTHIC mobs, we let MythicMobs handle its own attributes, but we can still override
-                            // things if needed here. For now, we'll only apply attributes to vanilla mobs.
-                            if (finalMobToSpawnInfo.getMobType().equals("VANILLA")) {
+                            LivingEntity spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, finalMobToSpawnInfo.getType());
+                            if (spawnedMob != null) {
+                                trackMob(spawnedMob, farm.getId(), finalMobToSpawnInfo.getTemplateId());
                                 applyMobAttributes(spawnedMob, finalMobToSpawnInfo);
                             }
                         }
@@ -187,19 +143,51 @@ public class FarmManager {
         }.runTask(plugin);
     }
 
-    private boolean isSafeLocation(Location loc) {
-        if (loc.getWorld() == null || !loc.getWorld().getWorldBorder().isInside(loc)) {
-            return false;
+    public void spawnSpecificMob(Farm farm, String mobId, int amount) {
+        MobInfo mobInfo = plugin.getConfigManager().getMobTemplate(mobId);
+        if (mobInfo == null) {
+            plugin.getLogger().warning("Event tried to spawn specific mob with unknown template ID: " + mobId);
+            return;
         }
+
+        for (int i = 0; i < amount; i++) {
+            Location spawnLocation = farm.getRegion().getCenter();
+
+            if (plugin.isMythicMobsEnabled() && "MYTHIC".equals(mobInfo.getMobType())) {
+                try {
+                    MobManager mobManager = MythicProvider.get().getMobManager();
+                    Optional<MythicMob> mythicMobOptional = mobManager.getMythicMob(mobInfo.getMythicId());
+                    if (mythicMobOptional.isPresent()) {
+                        MythicMob mythicMob = mythicMobOptional.get();
+
+                        // Use the modern location adapter here as well
+                        AbstractLocation mythicLocation = BukkitAdapter.adapt(spawnLocation);
+
+                        mythicMob.spawn(mythicLocation, mobInfo.getMythicLevel());
+                    } else {
+                        plugin.getLogger().warning("Event tried to spawn specific Mythic Mob '" + mobInfo.getMythicId() + "' but it was not found.");
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().log(Level.SEVERE, "Event failed to spawn specific Mythic Mob: " + mobInfo.getMythicId(), e);
+                }
+            } else {
+                LivingEntity spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, mobInfo.getType());
+                if (spawnedMob != null) {
+                    applyMobAttributes(spawnedMob, mobInfo);
+                }
+            }
+        }
+    }
+
+    // --- All other helper methods remain the same ---
+    // (isSafeLocation, applyMobAttributes, getRandomLocationInRegion, tracking methods, etc.)
+    private boolean isSafeLocation(Location loc) {
+        if (loc.getWorld() == null || !loc.getWorld().getWorldBorder().isInside(loc)) return false;
         org.bukkit.block.Block feetBlock = loc.getBlock();
         org.bukkit.block.Block headBlock = feetBlock.getRelative(BlockFace.UP);
         org.bukkit.block.Block groundBlock = feetBlock.getRelative(BlockFace.DOWN);
-
-        if (!groundBlock.getType().isSolid() || groundBlock.isLiquid()) return false;
-        if (!feetBlock.isPassable() || !headBlock.isPassable()) return false;
-        return !feetBlock.isLiquid() && !headBlock.isLiquid();
+        return groundBlock.getType().isSolid() && !groundBlock.isLiquid() && feetBlock.isPassable() && !feetBlock.isLiquid() && headBlock.isPassable() && !headBlock.isLiquid();
     }
-
     public void applyMobAttributes(LivingEntity mob, MobInfo mobInfo) {
         if (mobInfo.getDisplayName() != null && !mobInfo.getDisplayName().isEmpty()) {
             mob.setCustomName(mobInfo.getDisplayName());
@@ -215,22 +203,18 @@ public class FarmManager {
         if (mobInfo.getAttackDamage() > 0 && mob.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE) != null) {
             Objects.requireNonNull(mob.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE)).setBaseValue(mobInfo.getAttackDamage());
         }
-
-        if (mobInfo.getPotionEffects() != null && !mobInfo.getPotionEffects().isEmpty()) {
+        if (mobInfo.getPotionEffects() != null) {
             for (String effectString : mobInfo.getPotionEffects()) {
                 try {
                     String[] parts = effectString.split(":");
                     PotionEffectType type = PotionEffectType.getByName(parts[0].toUpperCase());
-                    int amplifier = (parts.length > 1) ? Integer.parseInt(parts[1]) : 0;
-                    if (type != null) {
-                        mob.addPotionEffect(new PotionEffect(type, Integer.MAX_VALUE, amplifier, true, false));
-                    }
+                    int amplifier = parts.length > 1 ? Integer.parseInt(parts[1]) - 1 : 0;
+                    if (type != null) mob.addPotionEffect(new PotionEffect(type, Integer.MAX_VALUE, amplifier, true, false));
                 } catch (Exception e) {
                     plugin.getLogger().warning("Invalid potion effect format in '" + mobInfo.getTemplateId() + "': " + effectString);
                 }
             }
         }
-
         EntityEquipment equipment = mob.getEquipment();
         if (equipment != null && mobInfo.getEquipment() != null) {
             for (Map.Entry<String, String> entry : mobInfo.getEquipment().entrySet()) {
@@ -251,41 +235,30 @@ public class FarmManager {
             }
         }
     }
-
     private Location getRandomLocationInRegion(Region region) {
         Location pos1 = region.getPos1();
         Location pos2 = region.getPos2();
-        int minX = Math.min(pos1.getBlockX(), pos2.getBlockX());
-        int maxX = Math.max(pos1.getBlockX(), pos2.getBlockX());
-        int minY = Math.min(pos1.getBlockY(), pos2.getBlockY());
-        int maxY = Math.max(pos1.getBlockY(), pos2.getBlockY());
-        int minZ = Math.min(pos1.getBlockZ(), pos2.getBlockZ());
-        int maxZ = Math.max(pos1.getBlockZ(), pos2.getBlockZ());
-        int randomX = ThreadLocalRandom.current().nextInt(minX, maxX + 1);
-        int randomY = ThreadLocalRandom.current().nextInt(minY, maxY + 1);
-        int randomZ = ThreadLocalRandom.current().nextInt(minZ, maxZ + 1);
-        return new Location(pos1.getWorld(), randomX + 0.5, randomY, randomZ + 0.5);
+        double minX = Math.min(pos1.getX(), pos2.getX());
+        double maxX = Math.max(pos1.getX(), pos2.getX());
+        double minY = Math.min(pos1.getY(), pos2.getY());
+        double maxY = Math.max(pos1.getY(), pos2.getY());
+        double minZ = Math.min(pos1.getZ(), pos2.getZ());
+        double maxZ = Math.max(pos1.getZ(), pos2.getZ());
+        return new Location(pos1.getWorld(), ThreadLocalRandom.current().nextDouble(minX, maxX), ThreadLocalRandom.current().nextDouble(minY, maxY), ThreadLocalRandom.current().nextDouble(minZ, maxZ));
     }
-
     public boolean isTrackedMob(Entity entity) {
         return trackedMobs.containsKey(entity.getUniqueId());
     }
-
     public TrackedMob getTrackedMob(Entity entity) {
         return trackedMobs.get(entity.getUniqueId());
     }
-
     public void untrackMob(Entity entity) {
         trackedMobs.remove(entity.getUniqueId());
     }
-
-
-
     public void trackMob(LivingEntity mob, String farmId, String templateId) {
         if (mob == null || farmId == null || templateId == null) return;
         trackedMobs.put(mob.getUniqueId(), new TrackedMob(farmId, templateId));
     }
-
     public Set<UUID> getTrackedMobIds() {
         return trackedMobs.keySet();
     }

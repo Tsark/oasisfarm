@@ -1,58 +1,72 @@
-# OasisFarm Event Configuration (V4.5)
+# OasisFarm Events v2 Configuration
 
-# How often the plugin checks if event conditions are met (in server ticks).
-event-check-interval: 1200 # 60 seconds
-
+# A list of all available events that farms can use.
 events:
   blood_moon:
-    target-farm: "starter_zone"
-    cooldown: 3600 # 1 hour
-    event-radius: 100 # Players within 100 blocks see the Boss Bar
-    on-end-commands:
-      - "broadcast &aThe blood moon recedes... for now."
+    # Conditions to start the event.
+    trigger:
+      # This is an "AND" group. ALL conditions inside must be true.
+      # You can also use 'mode: OR' to make it so ANY condition can be true.
+      mode: AND
+      conditions:
+        - type: PLAYER_COUNT_IN_FARM
+          value: '>= 1' # Supports operators: ==, !=, >, <, >=, <=
+        - type: TIME_OF_DAY
+          value: 'NIGHT'
+        - type: TOTAL_KILLS_IN_FARM
+          value: '>= 25' # Event triggers after 25 total kills in the farm
 
-    conditions:
-      MIN_PLAYERS: 1
-      TOTAL_KILLS_IN_FARM: 25
-
-    progress-tracking:
-      hologram-enabled: true
-      tracked-condition: "TOTAL_KILLS_IN_FARM"
-      hologram-line: "&cBlood Moon: &e{current_value}&7/&e{required_value} Kills"
-
+    # The sequence of phases for this event.
     phases:
-      - duration: 300 # 5 minutes
-        on-start-commands:
-          - "broadcast &cThe moon turns red! The undead grow restless..."
-        on-end-commands:
-          - "broadcast &eThe first wave has been repelled!"
-        farm-overrides:
-          spawn-interval-modifier: 0.5
-        mob-overrides:
-          add-mobs:
-            starter_skeleton: 0.20
-          modify-rewards:
-            starter_zombie:
-              killer:
-                - type: MONEY
-                  amount: 25 # Increased rewards during the event
-                - type: EXP
-                  amount: 10
+      - phase_id: wave_one
+        # Actions to execute when this phase begins.
+        actions:
+          - type: BROADCAST
+            message: "&cThe moon bleeds! The first wave of undead approaches..."
+          - type: SET_SPAWN_RATES # Override the farm's default spawns
+            mobs:
+              starter_zombie: 0.5 # 50% chance
+              starter_skeleton: 0.5 # 50% chance
 
-  daily_world_boss:
-    target-farm: "boss_arena"
-    cooldown: 600 # 10 minute cooldown
-    event-radius: 150
-    conditions:
-      # This event runs on a timer
-      INTERVAL: 86400 # Every 24 hours (86400 seconds)
-    phases:
-      - duration: 600 # 10 minutes
-        on-start-commands:
-          - "broadcast &4&lA powerful entity has appeared in the Boss Arena!"
-        farm-overrides:
-          clear-existing-mobs: true
-          max-mobs: 1
-        mob-overrides:
-          set-mobs:
-            undead_king: 1.0
+        # Conditions to advance to the next phase.
+        progression:
+          mode: OR # The phase ends if ANY of these are met.
+          conditions:
+            - type: DURATION
+              value: '300s' # Phase ends after 5 minutes
+            - type: MOB_KILLS_IN_FARM # Phase ends after players kill 20 zombies
+              mob_id: 'starter_zombie'
+              value: '>= 20'
+
+      - phase_id: boss_spawn
+        actions:
+          - type: BROADCAST
+            message: "&4&lThe ground trembles as the Skeletal King rises!"
+          - type: CLEAR_MOBS # Clear out the remaining wave one mobs
+          - type: SPAWN_ONCE # Spawn a single boss mob
+            mobs:
+              # You would need to create a 'skeletal_king' mob in mob-templates.yml for this to work
+              - mob_id: 'skeletal_minion'
+                amount: 1
+          - type: SET_SPAWN_RATES
+            mobs: {} # An empty mob list stops all natural spawning
+
+        progression:
+          mode: AND # Both conditions must be met to end the event
+          conditions:
+            - type: MOB_KILLS_IN_FARM
+              mob_id: 'skeletal_minion'
+              value: '>= 1' # The boss has been killed
+            - type: DURATION
+              value: '<= 600s' # And it was killed within 10 minutes
+
+      - phase_id: event_success
+        actions:
+          - type: BROADCAST
+            message: "&a&lVICTORY! The Blood Moon recedes, and the farm is safe once more."
+          - type: COMMAND
+            command: "eco give @a[distance=..100] 1000" # Give all players within 100 blocks $1000
+        progression:
+          conditions:
+            - type: DURATION
+              value: '10s' # The event ends 10 seconds after this phase starts.

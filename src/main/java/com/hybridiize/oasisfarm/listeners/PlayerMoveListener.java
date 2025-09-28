@@ -1,9 +1,7 @@
 package com.hybridiize.oasisfarm.listeners;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
-import com.hybridiize.oasisfarm.event.OasisEvent;
 import com.hybridiize.oasisfarm.farm.Farm;
-import com.hybridiize.oasisfarm.managers.EventManager;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.boss.BossBar;
@@ -28,7 +26,6 @@ public class PlayerMoveListener implements Listener {
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
-        // Optimization: only check if the player moved to a new block
         if (event.getFrom().getBlockX() == event.getTo().getBlockX() &&
                 event.getFrom().getBlockZ() == event.getTo().getBlockZ() &&
                 event.getFrom().getBlockY() == event.getTo().getBlockY()) {
@@ -42,10 +39,8 @@ public class PlayerMoveListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        // Clean up data for players who log out
         playerCurrentFarm.remove(event.getPlayer().getUniqueId());
         plugin.getRewardManager().handlePlayerQuit(event.getPlayer());
-        // We don't need to manually remove them from boss bars, Bukkit handles that.
     }
 
     private void handleEntryExit(Player player, Location to) {
@@ -62,13 +57,11 @@ public class PlayerMoveListener implements Listener {
         String previouslyInFarm = playerCurrentFarm.get(player.getUniqueId());
 
         if (farmPlayerIsIn != null && !farmPlayerIsIn.equals(previouslyInFarm)) {
-            // Player has entered a new farm zone
             if (enteredFarm != null) {
                 processFarmEntry(player, enteredFarm);
             }
         }
 
-        // Update player's current farm status
         if (farmPlayerIsIn != null) {
             playerCurrentFarm.put(player.getUniqueId(), farmPlayerIsIn);
         } else {
@@ -77,7 +70,6 @@ public class PlayerMoveListener implements Listener {
     }
 
     private void processFarmEntry(Player player, Farm farm) {
-        // Entry Cooldown Logic
         if (farm.getEntryCooldown() <= 0) return;
 
         long currentTime = System.currentTimeMillis();
@@ -87,7 +79,6 @@ public class PlayerMoveListener implements Listener {
         if (currentTime < cooldownEnd) {
             long timeLeft = (cooldownEnd - currentTime) / 1000;
             player.sendMessage(ChatColor.RED + "You cannot enter " + farm.getId() + " yet. Cooldown: " + timeLeft + "s");
-            // A safe teleport location can be the world spawn or a configured point
             player.teleport(player.getWorld().getSpawnLocation());
             return;
         }
@@ -98,23 +89,26 @@ public class PlayerMoveListener implements Listener {
     }
 
     private void handleBossBar(Player player, Location to) {
-        EventManager eventManager = plugin.getEventManager();
+        // This is the new, efficient V2 logic
+        Map<String, BossBar> activeBars = plugin.getEventManager().getActiveBossBars();
 
-        for (OasisEvent event : eventManager.getRunningEvents().values()) {
-            Farm farm = plugin.getConfigManager().getFarms().get(event.getTargetFarm());
+        for (Map.Entry<String, BossBar> entry : activeBars.entrySet()) {
+            String farmId = entry.getKey();
+            BossBar bar = entry.getValue();
+            Farm farm = plugin.getConfigManager().getFarms().get(farmId);
+
             if (farm == null) continue;
 
-            BossBar bar = eventManager.getBossBar(event.getId());
-            if (bar == null) continue;
+            // We will add a configurable radius back in the future. For now, it's 100 blocks.
+            double radius = 100;
+            double radiusSquared = radius * radius;
 
-            Location farmCenter = farm.getRegion().getCenter();
-            double radius = event.getEventRadius();
-
-            if (farmCenter.getWorld().equals(to.getWorld()) && farmCenter.distanceSquared(to) <= radius * radius) {
-                // Player is inside the radius of this event, show the bar
+            if (farm.getRegion().getCenter().getWorld().equals(to.getWorld()) &&
+                    farm.getRegion().getCenter().distanceSquared(to) <= radiusSquared) {
+                // Player is inside the radius, show the bar
                 bar.addPlayer(player);
             } else {
-                // Player is outside the radius of this event, hide the bar
+                // Player is outside the radius, hide the bar
                 bar.removePlayer(player);
             }
         }

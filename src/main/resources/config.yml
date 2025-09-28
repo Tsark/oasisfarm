@@ -23,6 +23,8 @@ farms:
     mobs:
       starter_zombie: 0.80
       starter_skeleton: 0.20
+    possible-events:
+      - 'blood_moon' # The ID must match an event in events.yml
 
   boss_arena:
     entry-cooldown: 300
@@ -33,3 +35,5 @@ farms:
     max-mobs: 1
     mobs:
       undead_king: 1.0
+    possible-events:
+      - 'blood_moon' # The ID must match an event in events.yml

@@ -4,6 +4,10 @@ import com.hybridiize.oasisfarm.Oasisfarm;
 import com.hybridiize.oasisfarm.event.EventCondition;
 import com.hybridiize.oasisfarm.event.EventPhase;
 import com.hybridiize.oasisfarm.event.OasisEvent;
+import com.hybridiize.oasisfarm.event.v2.OasisEventV2;
+import com.hybridiize.oasisfarm.event.v2.*;
+import java.util.Collections;
+import java.util.logging.Level;
 import com.hybridiize.oasisfarm.farm.Farm;
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.Region;
@@ -34,6 +38,7 @@ public class ConfigManager {
     private final Map<String, Farm> farms = new HashMap<>();
     private final Map<String, MobInfo> mobTemplates = new HashMap<>();
     private final Map<String, OasisEvent> events = new HashMap<>();
+    private final Map<String, OasisEventV2> eventsV2 = new HashMap<>();
 
     private File mobTemplatesFile;
     private FileConfiguration mobTemplatesConfig;
@@ -45,6 +50,7 @@ public class ConfigManager {
         setupTemplateFile();
         setupEventsFile();
     }
+
 
     private void setupTemplateFile() {
         mobTemplatesFile = new File(plugin.getDataFolder(), "mob-templates.yml");
@@ -65,7 +71,7 @@ public class ConfigManager {
     public void loadAllConfigs() {
         loadMobTemplates();
         loadFarms();
-        loadEvents();
+        loadEventsV2();
     }
 
     public void loadMobTemplates() {
@@ -287,6 +293,118 @@ public class ConfigManager {
         plugin.getLogger().info("Successfully loaded " + events.size() + " event(s).");
     }
 
+    // In ConfigManager.java, paste this entire block of methods
+
+    public void loadEventsV2() {
+        eventsV2.clear();
+        eventsFile = new File(plugin.getDataFolder(), "events.yml");
+        eventsConfig = YamlConfiguration.loadConfiguration(eventsFile);
+
+        ConfigurationSection eventsSection = eventsConfig.getConfigurationSection("events");
+        if (eventsSection == null) {
+            plugin.getLogger().info("No V2 events found in events.yml.");
+            return;
+        }
+
+        for (String eventId : eventsSection.getKeys(false)) {
+            try {
+                ConfigurationSection eventSection = eventsSection.getConfigurationSection(eventId);
+                if (eventSection == null) continue;
+
+                EventTrigger trigger = parseTrigger(eventSection.getConfigurationSection("trigger"));
+                List<EventPhaseV2> phases = parsePhases(eventSection.getMapList("phases"));
+
+                OasisEventV2 newEvent = new OasisEventV2(eventId, trigger, phases);
+                eventsV2.put(eventId, newEvent);
+
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to load V2 event '" + eventId + "'. Check formatting.", e);
+            }
+        }
+        plugin.getLogger().info("Successfully loaded " + eventsV2.size() + " V2 event(s).");
+    }
+
+    private EventTrigger parseTrigger(ConfigurationSection section) {
+        if (section == null) return new EventTrigger("AND", Collections.emptyList());
+        String mode = section.getString("mode", "AND");
+        List<Condition> conditions = parseConditions(section.getMapList("conditions"));
+        return new EventTrigger(mode, conditions);
+    }
+
+    private PhaseProgression parseProgression(Map<?, ?> progressionData) {
+        if (progressionData == null) return new PhaseProgression("AND", Collections.emptyList());
+        String mode = String.valueOf(progressionData.getOrDefault("mode", "AND"));
+        List<Condition> conditions = parseConditions((List<?>) progressionData.get("conditions"));
+        return new PhaseProgression(mode, conditions);
+    }
+
+    private List<EventPhaseV2> parsePhases(List<Map<?, ?>> phaseDataList) {
+        List<EventPhaseV2> phases = new ArrayList<>();
+        if (phaseDataList == null) return phases;
+
+        for (Map<?, ?> phaseData : phaseDataList) {
+            if (phaseData == null) continue;
+
+            String phaseId = String.valueOf(phaseData.getOrDefault("phase_id", "unknown_phase"));
+            List<PhaseAction> actions = parseActions((List<?>) phaseData.get("actions"));
+            PhaseProgression progression = parseProgression((Map<?, ?>) phaseData.get("progression"));
+
+            phases.add(new EventPhaseV2(phaseId, actions, progression));
+        }
+        return phases;
+    }
+
+    private List<Condition> parseConditions(List<?> conditionDataList) {
+        List<Condition> conditions = new ArrayList<>();
+        if (conditionDataList == null) return conditions;
+
+        for (Object item : conditionDataList) {
+            if (item instanceof Map) {
+                Map<?, ?> conditionData = (Map<?, ?>) item;
+                String type = String.valueOf(conditionData.get("type"));
+                String value = String.valueOf(conditionData.get("value"));
+
+                Map<String, String> properties = new HashMap<>();
+                for (Map.Entry<?, ?> entry : conditionData.entrySet()) {
+                    String key = String.valueOf(entry.getKey());
+                    if (!key.equals("type") && !key.equals("value")) {
+                        properties.put(key, String.valueOf(entry.getValue()));
+                    }
+                }
+                conditions.add(new Condition(type, value, properties));
+            }
+        }
+        return conditions;
+    }
+
+    private List<PhaseAction> parseActions(List<?> actionDataList) {
+        List<PhaseAction> actions = new ArrayList<>();
+        if (actionDataList == null) return actions;
+
+        for (Object item : actionDataList) {
+            if (item instanceof Map) {
+                Map<?, ?> actionData = (Map<?, ?>) item;
+                Object rawType = actionData.get("type");
+                if (rawType instanceof String) {
+                    String type = (String) rawType;
+                    switch (type.toUpperCase()) {
+                        case "BROADCAST":
+                            actions.add(new com.hybridiize.oasisfarm.event.v2.action.BroadcastAction(actionData));
+                            break;
+                        case "COMMAND":
+                            actions.add(new com.hybridiize.oasisfarm.event.v2.action.CommandAction(actionData));
+                            break;
+                        case "SPAWN_ONCE":
+                            actions.add(new com.hybridiize.oasisfarm.event.v2.action.SpawnOnceAction(actionData));
+                            break;
+                    }
+                }
+            }
+        }
+        return actions;
+    }
+
+
     // The method signature and return type have changed!
     private List<RewardSet> parseRewards(ConfigurationSection section) {
         List<RewardSet> rewardSets = new ArrayList<>();
@@ -396,6 +514,14 @@ public class ConfigManager {
         }
     }
 
+    public OasisEventV2 getEventV2(String eventId) {
+        return eventsV2.get(eventId);
+    }
+
+    public List<String> getPossibleEventsForFarm(String farmId) {
+        // This assumes you have updated your config.yml as per Step 1.2
+        return plugin.getConfig().getStringList("farms." + farmId + ".possible-events");
+    }
     public FileConfiguration getMobTemplatesConfig() { return mobTemplatesConfig; }
     public Map<String, Farm> getFarms() { return Collections.unmodifiableMap(farms); }
     public MobInfo getMobTemplate(String templateId) { return mobTemplates.get(templateId); }

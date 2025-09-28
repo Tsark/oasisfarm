@@ -2,6 +2,7 @@ package com.hybridiize.oasisfarm;
 
 import com.hybridiize.oasisfarm.commands.CommandManager;
 import com.hybridiize.oasisfarm.listeners.MobKillListener;
+import com.hybridiize.oasisfarm.listeners.MythicMobListener;
 import com.hybridiize.oasisfarm.listeners.PlayerMoveListener;
 import com.hybridiize.oasisfarm.listeners.WandListener;
 import com.hybridiize.oasisfarm.managers.*;
@@ -19,6 +20,7 @@ public final class Oasisfarm extends JavaPlugin {
 
     // Managers
     private ConfigManager configManager;
+    private ConditionManager conditionManager;
     private EconomyManager economyManager;
     private EventDataManager eventDataManager;
     private EventManager eventManager;
@@ -38,6 +40,7 @@ public final class Oasisfarm extends JavaPlugin {
 
         // Initialize all managers
         this.configManager = new ConfigManager(this);
+        this.conditionManager = new ConditionManager(this);
         this.economyManager = new EconomyManager(this);
         this.eventDataManager = new EventDataManager(this);
         this.farmDataManager = new FarmDataManager(this);
@@ -67,6 +70,9 @@ public final class Oasisfarm extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new WandListener(selectionManager), this);
         getServer().getPluginManager().registerEvents(new MobKillListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerMoveListener(this), this);
+        if (mythicMobsEnabled) {
+            getServer().getPluginManager().registerEvents(new MythicMobListener(this), this);
+        }
 
         getLogger().info("OasisFarm has been enabled successfully!");
     }
@@ -117,6 +123,8 @@ public final class Oasisfarm extends JavaPlugin {
     public static Oasisfarm getInstance() {
         return instance;
     }
+
+    public ConditionManager getConditionManager() { return conditionManager; }
 
     public ConfigManager getConfigManager() {
         return configManager;
