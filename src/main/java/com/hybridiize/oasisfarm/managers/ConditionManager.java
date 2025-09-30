@@ -1,10 +1,9 @@
 package com.hybridiize.oasisfarm.managers;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
+import com.hybridiize.oasisfarm.event.v2.ActiveEventTrackerV2;
 import com.hybridiize.oasisfarm.event.v2.Condition;
 import com.hybridiize.oasisfarm.farm.Farm;
-import me.clip.placeholderapi.PlaceholderAPI;
-import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
@@ -25,17 +24,20 @@ public class ConditionManager {
      * @param conditions The list of conditions from the config.
      * @param mode "AND" or "OR".
      * @param farm The farm the event is running in.
+     * @param tracker The active event tracker (can be null for trigger checks).
      * @return True if the conditions are met, false otherwise.
      */
-    public boolean areConditionsMet(List<Condition> conditions, String mode, Farm farm) {
+    public boolean areConditionsMet(List<Condition> conditions, String mode, Farm farm, ActiveEventTrackerV2 tracker) {
         if (conditions == null || conditions.isEmpty()) {
-            return false; // No conditions to meet.
+            // If checking for triggers, no conditions means it can't trigger.
+            // If checking for progression, no conditions means it can't progress.
+            return false;
         }
 
         boolean isOrMode = "OR".equalsIgnoreCase(mode);
 
         for (Condition condition : conditions) {
-            boolean result = check(condition, farm);
+            boolean result = check(condition, farm, tracker);
 
             if (isOrMode && result) {
                 return true; // In OR mode, we only need one success.
@@ -45,15 +47,13 @@ public class ConditionManager {
             }
         }
 
-        // If we get here in AND mode, it means all conditions passed.
-        // If we get here in OR mode, it means none of the conditions passed.
         return !isOrMode;
     }
 
     /**
      * Checks a single condition.
      */
-    private boolean check(Condition condition, Farm farm) {
+    private boolean check(Condition condition, Farm farm, ActiveEventTrackerV2 tracker) {
         switch (condition.getType().toUpperCase()) {
             case "PLAYER_COUNT_IN_FARM":
                 return checkPlayerCount(condition, farm);
@@ -61,7 +61,10 @@ public class ConditionManager {
                 return checkTimeOfDay(condition, farm);
             case "TOTAL_KILLS_IN_FARM":
                 return checkTotalKills(condition, farm);
-            // We will add more conditions like DURATION, MOB_KILLS, and PAPI later.
+            case "DURATION":
+                return checkDuration(condition, tracker);
+            case "MOB_KILLS_IN_FARM":
+                return checkMobKills(condition, tracker);
             default:
                 plugin.getLogger().warning("Unknown event condition type: " + condition.getType());
                 return false;
@@ -100,6 +103,36 @@ public class ConditionManager {
 
     private boolean checkTotalKills(Condition condition, Farm farm) {
         int currentKills = plugin.getFarmDataManager().getKillCount(farm.getId());
+        return compareNumeric(currentKills, condition.getValue());
+    }
+
+    private boolean checkDuration(Condition condition, ActiveEventTrackerV2 tracker) {
+        if (tracker == null) return false; // Duration is only valid during an event phase
+
+        long phaseStartTime = tracker.getPhaseStartTime();
+        long elapsedMillis = System.currentTimeMillis() - phaseStartTime;
+
+        // Parse the duration from the config value (e.g., "300s")
+        String valueString = condition.getValue().toLowerCase().replace("s", "");
+        try {
+            long requiredSeconds = Long.parseLong(valueString);
+            return compareNumeric(elapsedMillis / 1000.0, ">= " + requiredSeconds);
+        } catch (NumberFormatException e) {
+            plugin.getLogger().warning("Invalid duration format: " + condition.getValue());
+            return false;
+        }
+    }
+
+    private boolean checkMobKills(Condition condition, ActiveEventTrackerV2 tracker) {
+        if (tracker == null) return false; // Mob kills are only tracked during an event
+
+        String mobId = condition.getProperties().get("mob_id");
+        if (mobId == null) {
+            plugin.getLogger().warning("MOB_KILLS_IN_FARM condition is missing 'mob_id' property.");
+            return false;
+        }
+
+        int currentKills = tracker.getMobKills(mobId);
         return compareNumeric(currentKills, condition.getValue());
     }
 

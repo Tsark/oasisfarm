@@ -331,12 +331,15 @@ public class ConfigManager {
         return new EventTrigger(mode, conditions);
     }
 
-    private PhaseProgression parseProgression(Map<?, ?> progressionData) {
-        if (progressionData == null) return new PhaseProgression("AND", Collections.emptyList());
-        String mode = String.valueOf(progressionData.getOrDefault("mode", "AND"));
-        List<Condition> conditions = parseConditions((List<?>) progressionData.get("conditions"));
+    private PhaseProgression parseProgression(ConfigurationSection progressionSection) {
+        if (progressionSection == null) {
+            return new PhaseProgression("AND", Collections.emptyList());
+        }
+        String mode = progressionSection.getString("mode", "AND");
+        List<Condition> conditions = parseConditions(progressionSection.getMapList("conditions"));
         return new PhaseProgression(mode, conditions);
     }
+
 
     private List<EventPhaseV2> parsePhases(List<Map<?, ?>> phaseDataList) {
         List<EventPhaseV2> phases = new ArrayList<>();
@@ -345,14 +348,30 @@ public class ConfigManager {
         for (Map<?, ?> phaseData : phaseDataList) {
             if (phaseData == null) continue;
 
-            String phaseId = String.valueOf(phaseData.getOrDefault("phase_id", "unknown_phase"));
+            String phaseId = "unknown_phase";
+            if (phaseData.get("phase_id") != null) {
+                phaseId = String.valueOf(phaseData.get("phase_id"));
+            }
+
             List<PhaseAction> actions = parseActions((List<?>) phaseData.get("actions"));
-            PhaseProgression progression = parseProgression((Map<?, ?>) phaseData.get("progression"));
+
+            // Safely get the progression section
+            PhaseProgression progression = null;
+            Object rawProgression = phaseData.get("progression");
+            if (rawProgression instanceof ConfigurationSection) {
+                progression = parseProgression((ConfigurationSection) rawProgression);
+            } else if (rawProgression instanceof Map) {
+                // This is a fallback, but the main fix is handling ConfigurationSection
+                FileConfiguration tempConfig = new YamlConfiguration();
+                tempConfig.createSection("temp", (Map<?, ?>) rawProgression);
+                progression = parseProgression(tempConfig.getConfigurationSection("temp"));
+            }
 
             phases.add(new EventPhaseV2(phaseId, actions, progression));
         }
         return phases;
     }
+
 
     private List<Condition> parseConditions(List<?> conditionDataList) {
         List<Condition> conditions = new ArrayList<>();

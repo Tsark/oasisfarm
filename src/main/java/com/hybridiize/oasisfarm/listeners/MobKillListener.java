@@ -1,12 +1,11 @@
 package com.hybridiize.oasisfarm.listeners;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
-import com.hybridiize.oasisfarm.event.EventPhase;
+import com.hybridiize.oasisfarm.event.v2.ActiveEventTrackerV2;
 import com.hybridiize.oasisfarm.farm.Farm;
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.TrackedMob;
 import com.hybridiize.oasisfarm.managers.EventManager;
-import com.hybridiize.oasisfarm.rewards.Reward;
 import com.hybridiize.oasisfarm.rewards.RewardSet;
 import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Bukkit;
@@ -48,12 +47,24 @@ public class MobKillListener implements Listener {
 
         String templateId = trackedMob.getTemplateId();
         MobInfo mobInfo = plugin.getConfigManager().getMobTemplate(templateId);
-        System.out.println("[DEBUG] Kill detected for template: " + templateId);
 
         if (mobInfo == null) {
             plugin.getFarmManager().untrackMob(killedMob);
             return;
         }
+
+        // Handle Event Kill Tracking
+        EventManager eventManager = plugin.getEventManager();
+        if (eventManager.isFarmRunningEvent(trackedMob.getFarmId())) {
+            ActiveEventTrackerV2 tracker = eventManager.getActiveEventTracker(trackedMob.getFarmId());
+            if (tracker != null) {
+                tracker.incrementMobKills(templateId);
+            }
+        } else {
+            // Only increment total kills if NO event is running
+            plugin.getFarmDataManager().incrementKillCount(trackedMob.getFarmId());
+        }
+
 
         if (mobInfo.getKillPermission() != null && !killer.hasPermission(mobInfo.getKillPermission())) {
             killer.sendMessage(ChatColor.RED + "You do not have permission to get rewards for killing this mob.");
@@ -75,21 +86,12 @@ public class MobKillListener implements Listener {
 
         plugin.getRewardManager().incrementKillCount(killer);
 
-        // --- FINAL, CORRECTED REWARD LOGIC ---
         List<RewardSet> killerRewards = new ArrayList<>(mobInfo.getKillerRewards());
         List<RewardSet> farmWideRewards = new ArrayList<>(mobInfo.getFarmWideRewards());
-        System.out.println("[DEBUG] Kill Listener: Loaded " + killerRewards.size() + " killer reward sets and " + farmWideRewards.size() + " farm-wide sets."); //
 
-        EventManager eventManager = plugin.getEventManager();
-        if (eventManager.isFarmRunningEvent(trackedMob.getFarmId())) {
-            // You can add logic here in the future to modify rewards during an event
-        }
-
-       // System.out.println("[DEBUG] Processing rewards for killer: " + killer.getName());
         processRewards(killer, killerRewards);
 
         if (!farmWideRewards.isEmpty()) {
-           // System.out.println("[DEBUG] Processing farm-wide rewards...");
             Farm farm = plugin.getConfigManager().getFarms().get(trackedMob.getFarmId());
             if (farm != null) {
                 for (Player playerInFarm : Bukkit.getOnlinePlayers()) {
@@ -110,34 +112,18 @@ public class MobKillListener implements Listener {
             cooldowns.get(killer.getUniqueId()).put(mobIdentifier, newCooldownEnd);
         }
 
-        if (!plugin.getEventManager().isFarmRunningEvent(trackedMob.getFarmId())) {
-            plugin.getFarmDataManager().incrementKillCount(trackedMob.getFarmId());
-        }
-
         plugin.getFarmManager().untrackMob(killedMob);
     }
 
-    // The method signature has changed from List<Reward> to List<RewardSet>
     private void processRewards(Player player, List<com.hybridiize.oasisfarm.rewards.RewardSet> rewardSets) {
         if (rewardSets == null || rewardSets.isEmpty()) {
             return;
         }
 
-        System.out.println("[DEBUG] Processing " + rewardSets.size() + " reward sets for " + player.getName()); // <-- ADD
-
         for (com.hybridiize.oasisfarm.rewards.RewardSet set : rewardSets) {
-            double setRoll = ThreadLocalRandom.current().nextDouble();
-            boolean setSuccess = setRoll <= set.getChance();
-            System.out.println("[DEBUG] -> Rolling for set (Chance: " + set.getChance() + ", Roll: " + String.format("%.2f", setRoll) + ", Success: " + setSuccess + ")"); // <-- ADD
-
-            if (setSuccess) {
-                System.out.println("[DEBUG] --> Set SUCCEEDED. Processing " + set.getRewards().size() + " inner rewards."); // <-- ADD
+            if (ThreadLocalRandom.current().nextDouble() <= set.getChance()) {
                 for (com.hybridiize.oasisfarm.rewards.Reward individualReward : set.getRewards()) {
-                    double itemRoll = ThreadLocalRandom.current().nextDouble();
-                    boolean itemSuccess = itemRoll <= individualReward.getChance();
-                    System.out.println("[DEBUG] ---> Rolling for " + individualReward.getClass().getSimpleName() + " (Chance: " + individualReward.getChance() + ", Roll: " + String.format("%.2f", itemRoll) + ", Success: " + itemSuccess + ")"); // <-- ADD
-
-                    if (itemSuccess) {
+                    if (ThreadLocalRandom.current().nextDouble() <= individualReward.getChance()) {
                         individualReward.give(player);
                     }
                 }

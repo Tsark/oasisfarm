@@ -1,9 +1,11 @@
 package com.hybridiize.oasisfarm.listeners;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
+import com.hybridiize.oasisfarm.event.v2.ActiveEventTrackerV2;
 import com.hybridiize.oasisfarm.farm.Farm;
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.TrackedMob;
+import com.hybridiize.oasisfarm.managers.EventManager;
 import com.hybridiize.oasisfarm.rewards.RewardSet;
 import io.lumine.mythic.bukkit.events.MythicMobDeathEvent;
 import me.clip.placeholderapi.PlaceholderAPI;
@@ -51,6 +53,18 @@ public class MythicMobListener implements Listener {
             return;
         }
 
+        // Handle Event Kill Tracking
+        EventManager eventManager = plugin.getEventManager();
+        if (eventManager.isFarmRunningEvent(trackedMob.getFarmId())) {
+            ActiveEventTrackerV2 tracker = eventManager.getActiveEventTracker(trackedMob.getFarmId());
+            if (tracker != null) {
+                tracker.incrementMobKills(templateId);
+            }
+        } else {
+            // Only increment total kills if NO event is running
+            plugin.getFarmDataManager().incrementKillCount(trackedMob.getFarmId());
+        }
+
         if (mobInfo.getKillPermission() != null && !killer.hasPermission(mobInfo.getKillPermission())) {
             killer.sendMessage(ChatColor.RED + "You do not have permission to get rewards for killing this mob.");
             plugin.getFarmManager().untrackMob(event.getEntity());
@@ -95,10 +109,6 @@ public class MythicMobListener implements Listener {
         if (mobInfo.getKillCooldown() > 0) {
             long newCooldownEnd = currentTime + (mobInfo.getKillCooldown() * 1000L);
             cooldowns.get(killer.getUniqueId()).put(mobIdentifier, newCooldownEnd);
-        }
-
-        if (!plugin.getEventManager().isFarmRunningEvent(trackedMob.getFarmId())) {
-            plugin.getFarmDataManager().incrementKillCount(trackedMob.getFarmId());
         }
 
         plugin.getFarmManager().untrackMob(event.getEntity());

@@ -81,7 +81,8 @@ public class EventManager {
         for (String eventId : possibleEventIds) {
             OasisEventV2 event = plugin.getConfigManager().getEventV2(eventId);
             if (event != null) {
-                boolean triggered = plugin.getConditionManager().areConditionsMet(event.getTrigger().getConditions(), event.getTrigger().getMode(), farm);
+                // Pass null for the tracker since no event is active yet
+                boolean triggered = plugin.getConditionManager().areConditionsMet(event.getTrigger().getConditions(), event.getTrigger().getMode(), farm, null);
                 if (triggered) {
                     startEvent(event, farm);
                     break; // Start only one event per check
@@ -102,8 +103,8 @@ public class EventManager {
             return; // This phase has no way to end, it's a "forever" phase until stopped manually.
         }
 
-        // Ask the ConditionManager if it's time to advance
-        boolean shouldAdvance = plugin.getConditionManager().areConditionsMet(progression.getConditions(), progression.getMode(), tracker.getFarm());
+        // Ask the ConditionManager if it's time to advance, passing the tracker
+        boolean shouldAdvance = plugin.getConditionManager().areConditionsMet(progression.getConditions(), progression.getMode(), tracker.getFarm(), tracker);
 
         if (shouldAdvance) {
             advanceEventPhase(tracker);
@@ -128,6 +129,16 @@ public class EventManager {
     public boolean isFarmRunningEvent(String farmId) {
         return activeFarmEvents.containsKey(farmId);
     }
+
+    /**
+     * Gets the active event tracker for a specific farm.
+     * @param farmId The ID of the farm.
+     * @return The ActiveEventTrackerV2, or null if no event is running.
+     */
+    public ActiveEventTrackerV2 getActiveEventTracker(String farmId) {
+        return activeFarmEvents.get(farmId);
+    }
+
 
     /**
      * Gets an unmodifiable view of the currently active farm events.

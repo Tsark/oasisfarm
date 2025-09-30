@@ -59,6 +59,11 @@ public final class Oasisfarm extends JavaPlugin {
             this.mythicMobsEnabled = false;
             getLogger().info("MythicMobs not found. Spawning will be limited to vanilla mobs.");
         }
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            getLogger().info("Successfully hooked into PlaceholderAPI!");
+        } else {
+            getLogger().warning("PlaceholderAPI not found! Placeholders will not work.");
+        }
 
         // Load all data from configuration files
         this.configManager.loadAllConfigs();

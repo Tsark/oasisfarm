@@ -1,6 +1,8 @@
 package com.hybridiize.oasisfarm.event.v2;
 
 import com.hybridiize.oasisfarm.farm.Farm;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ActiveEventTrackerV2 {
 
@@ -8,6 +10,7 @@ public class ActiveEventTrackerV2 {
     private final Farm farm;
     private int currentPhaseIndex;
     private long phaseStartTime;
+    private final Map<String, Integer> mobKills = new HashMap<>();
 
     public ActiveEventTrackerV2(OasisEventV2 event, Farm farm) {
         this.event = event;
@@ -52,6 +55,15 @@ public class ActiveEventTrackerV2 {
             return null; // The event is over
         }
         this.phaseStartTime = System.currentTimeMillis();
+        this.mobKills.clear(); // Reset kills for the new phase
         return getCurrentPhase();
+    }
+
+    public void incrementMobKills(String mobId) {
+        mobKills.put(mobId, mobKills.getOrDefault(mobId, 0) + 1);
+    }
+
+    public int getMobKills(String mobId) {
+        return mobKills.getOrDefault(mobId, 0);
     }
 }
