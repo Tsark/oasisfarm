@@ -1,18 +1,19 @@
 templates:
   default-farm-hologram:
-    # These lines will be parsed for OasisFarm placeholders and PAPI placeholders.
     lines:
       - "&b&l{farm_name}"
-      - "&7--------------------"
       - "&fMobs: &a{farm_mobs_current}&7/&e{farm_mobs_max}"
       - "&fEvent: &c{event_name}"
-      - "&fProgress: &e{event_progress_current}&7/&e{event_progress_required}"
-    # How often the hologram should update (in seconds).
-    update-interval: 5
+      - "&fPhase: &6{event_phase}"
+      - "&f{event_progress_type}: &e{event_progress_current}&7/&e{event_progress_required}"
 
-  collection-pot-hologram:
+  boss-arena-hologram:
     lines:
-      - "&6&lCollection Pot"
-      - "&fCurrent: &e${pot_current}"
-      - "&fGoal: &e${pot_required}"
-      - "&a&l{pot_progress_bar}"
+      - "&4&l☠ {farm_name} ☠"
+      - "&cNext Boss Event: Soon™"
+      - "&7Mobs Present: &e{farm_mobs_current}"
+
+  simple-hologram:
+    lines:
+      - "&aWelcome to {farm_name}"
+      - "&eMobs: {farm_mobs_current}/{farm_mobs_max}"

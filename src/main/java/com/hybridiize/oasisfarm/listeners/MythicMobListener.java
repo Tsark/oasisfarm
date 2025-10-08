@@ -1,11 +1,9 @@
 package com.hybridiize.oasisfarm.listeners;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
-import com.hybridiize.oasisfarm.event.v2.ActiveEventTrackerV2;
 import com.hybridiize.oasisfarm.farm.Farm;
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.TrackedMob;
-import com.hybridiize.oasisfarm.managers.EventManager;
 import com.hybridiize.oasisfarm.rewards.RewardSet;
 import io.lumine.mythic.bukkit.events.MythicMobDeathEvent;
 import me.clip.placeholderapi.PlaceholderAPI;
@@ -32,13 +30,18 @@ public class MythicMobListener implements Listener {
 
     @EventHandler
     public void onMythicMobDeath(MythicMobDeathEvent event) {
+        //System.out.println("[DEBUG] MythicMobDeathEvent triggered.");
+
         if (!(event.getKiller() instanceof Player)) {
+            System.out.println("[DEBUG] Killer is not a player. Aborting.");
             return;
         }
 
         Player killer = (Player) event.getKiller();
+        //System.out.println("[DEBUG] Killer identified: " + killer.getName());
 
         if (!plugin.getFarmManager().isTrackedMob(event.getEntity())) {
+            //System.out.println("[DEBUG] Mob is not tracked by OasisFarm. Aborting.");
             return;
         }
 
@@ -47,82 +50,36 @@ public class MythicMobListener implements Listener {
 
         String templateId = trackedMob.getTemplateId();
         MobInfo mobInfo = plugin.getConfigManager().getMobTemplate(templateId);
+        //System.out.println("[DEBUG] Kill detected for template: " + templateId);
 
         if (mobInfo == null) {
             plugin.getFarmManager().untrackMob(event.getEntity());
             return;
         }
 
-        // Handle Event Kill Tracking
-        EventManager eventManager = plugin.getEventManager();
-        if (eventManager.isFarmRunningEvent(trackedMob.getFarmId())) {
-            ActiveEventTrackerV2 tracker = eventManager.getActiveEventTracker(trackedMob.getFarmId());
-            if (tracker != null) {
-                tracker.incrementMobKills(templateId);
-            }
-        } else {
-            // Only increment total kills if NO event is running
-            plugin.getFarmDataManager().incrementKillCount(trackedMob.getFarmId());
-        }
-
-        if (mobInfo.getKillPermission() != null && !killer.hasPermission(mobInfo.getKillPermission())) {
-            killer.sendMessage(ChatColor.RED + "You do not have permission to get rewards for killing this mob.");
-            plugin.getFarmManager().untrackMob(event.getEntity());
-            return;
-        }
-
-        String mobIdentifier = mobInfo.getTemplateId();
-        long currentTime = System.currentTimeMillis();
-        long cooldownEnd = cooldowns.computeIfAbsent(killer.getUniqueId(), k -> new HashMap<>())
-                .getOrDefault(mobIdentifier, 0L);
-
-        if (currentTime < cooldownEnd) {
-            long timeLeft = (cooldownEnd - currentTime) / 1000;
-            killer.sendMessage(ChatColor.RED + "You are on cooldown for this mob type. Time left: " + timeLeft + "s");
-            plugin.getFarmManager().untrackMob(event.getEntity());
-            return;
-        }
-
-        plugin.getRewardManager().incrementKillCount(killer);
-
+        // --- All checks passed, proceeding to process rewards ---
+        //System.out.println("[DEBUG] All checks passed. Preparing to process rewards.");
         List<RewardSet> killerRewards = new ArrayList<>(mobInfo.getKillerRewards());
-        List<RewardSet> farmWideRewards = new ArrayList<>(mobInfo.getFarmWideRewards());
-
         processRewards(killer, killerRewards);
-
-        if (!farmWideRewards.isEmpty()) {
-            Farm farm = plugin.getConfigManager().getFarms().get(trackedMob.getFarmId());
-            if (farm != null) {
-                for (Player playerInFarm : Bukkit.getOnlinePlayers()) {
-                    if (farm.getRegion().contains(playerInFarm.getLocation())) {
-                        processRewards(playerInFarm, farmWideRewards);
-                    }
-                }
-            }
-        }
-
-        if (mobInfo.getBroadcastKill() != null && !mobInfo.getBroadcastKill().isEmpty()) {
-            String broadcastMessage = PlaceholderAPI.setPlaceholders(killer, mobInfo.getBroadcastKill());
-            Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', broadcastMessage));
-        }
-
-        if (mobInfo.getKillCooldown() > 0) {
-            long newCooldownEnd = currentTime + (mobInfo.getKillCooldown() * 1000L);
-            cooldowns.get(killer.getUniqueId()).put(mobIdentifier, newCooldownEnd);
-        }
-
         plugin.getFarmManager().untrackMob(event.getEntity());
     }
 
     private void processRewards(Player player, List<RewardSet> rewardSets) {
+        //System.out.println("[DEBUG] Now inside processRewards for player: " + player.getName());
         if (rewardSets == null || rewardSets.isEmpty()) {
+            //System.out.println("[DEBUG] Reward sets list is null or empty. Nothing to process.");
             return;
         }
 
+        //System.out.println("[DEBUG] Processing " + rewardSets.size() + " reward sets...");
         for (RewardSet set : rewardSets) {
+            //System.out.println("[DEBUG] -> Checking reward set with chance: " + set.getChance());
             if (ThreadLocalRandom.current().nextDouble() <= set.getChance()) {
+                //System.out.println("[DEBUG] --> Reward set PASSED chance check.");
                 for (com.hybridiize.oasisfarm.rewards.Reward individualReward : set.getRewards()) {
+                    //System.out.println("[DEBUG] ---> Evaluating individual reward of type: " + individualReward.getClass().getSimpleName());
                     if (ThreadLocalRandom.current().nextDouble() <= individualReward.getChance()) {
+                        //System.out.println("[DEBUG] ----> Individual reward PASSED chance check. Giving reward to player.");
                         individualReward.give(player);
                     }
                 }

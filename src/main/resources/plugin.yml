@@ -1,16 +1,13 @@
 name: OasisFarm
 version: ${project.version}
+
 main: com.hybridiize.oasisfarm.Oasisfarm
+
 api-version: '1.21'
 
-# This tells the server that PlaceholderAPI is a REQUIRED dependency.
-# OasisFarm will not start without it.
-depend:
-  - PlaceholderAPI
-
-# This tells the server about optional dependencies.
-# OasisFarm will still start if these are missing.
+# This section tells the server to load these plugins before OasisFarm.
 softdepend:
+  - PlaceholderAPI
   - DecentHolograms
   - Vault
   - MythicMobs

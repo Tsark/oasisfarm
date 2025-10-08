@@ -1,8 +1,9 @@
 package com.hybridiize.oasisfarm.commands.subcommands;
 
 import com.hybridiize.oasisfarm.commands.eventsubcommands.*;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,9 +44,13 @@ public class EventCommand extends SubCommand {
     }
 
     private void sendHelp(Player player) {
-        player.sendMessage(ChatColor.GOLD + "--- OasisFarm Event Commands ---");
+        player.sendMessage(Component.text("--- OasisFarm Event Commands ---", NamedTextColor.GOLD));
         for (EventSubCommand sub : subCommands) {
-            player.sendMessage(ChatColor.AQUA + sub.getSyntax() + ChatColor.GRAY + " - " + sub.getDescription());
+            player.sendMessage(
+                    Component.text(sub.getSyntax(), NamedTextColor.AQUA)
+                            .append(Component.text(" - ", NamedTextColor.GRAY))
+                            .append(Component.text(sub.getDescription(), NamedTextColor.GRAY))
+            );
         }
     }
 }

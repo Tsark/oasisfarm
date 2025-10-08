@@ -12,7 +12,7 @@
     <name>OasisFarm</name>
 
     <properties>
-        <java.version>17</java.version> <!-- Using Java 17 for broad compatibility, 21 is also fine -->
+        <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -22,16 +22,22 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
-                <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
-                </configuration>
+                <version>3.11.0</version> <configuration>
+                <source>${java.version}</source>
+                <target>${java.version}</target>
+            </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.2.4</version>
+                <version>3.5.1</version> <configuration>
+                <relocations>
+                    <relocation>
+                        <pattern>net.kyori</pattern>
+                        <shadedPattern>com.hybridiize.oasisfarm.libs.kyori</shadedPattern>
+                    </relocation>
+                </relocations>
+            </configuration>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -68,32 +74,40 @@
             <url>https://jitpack.io/</url>
         </repository>
         <repository>
-            <id>essentialsx-repo</id>
-            <url>https://repo.essentialsx.net/releases/</url>
-        </repository>
-        <repository>
             <id>nexus</id>
             <name>Lumine Releases</name>
             <url>https://mvn.lumine.io/repository/maven-public/</url>
         </repository>
-
     </repositories>
 
     <dependencies>
-        <!-- Paper API -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
             <version>1.21-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
-        <!-- PlaceholderAPI -->
+
+        <dependency>
+            <groupId>net.kyori</groupId>
+            <artifactId>adventure-api</artifactId>
+            <version>4.17.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.kyori</groupId>
+            <artifactId>adventure-text-serializer-plain</artifactId>
+            <version>4.17.0</version>
+            <scope>compile</scope>
+        </dependency>
+
         <dependency>
             <groupId>me.clip</groupId>
             <artifactId>placeholderapi</artifactId>
             <version>2.11.6</version>
             <scope>provided</scope>
         </dependency>
+
         <dependency>
             <groupId>com.github.decentsoftware-eu</groupId>
             <artifactId>decentholograms</artifactId>
@@ -112,6 +126,5 @@
             <version>1.7</version>
             <scope>provided</scope>
         </dependency>
-
     </dependencies>
 </project>

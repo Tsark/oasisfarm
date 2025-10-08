@@ -44,11 +44,14 @@ public class ConfigManager {
     private FileConfiguration mobTemplatesConfig;
     private File eventsFile;
     private FileConfiguration eventsConfig;
+    private File hologramsFile;
+    private FileConfiguration hologramsConfig;
 
     public ConfigManager(Oasisfarm plugin) {
         this.plugin = plugin;
         setupTemplateFile();
         setupEventsFile();
+        setupHologramsFile();
     }
 
 
@@ -72,6 +75,7 @@ public class ConfigManager {
         loadMobTemplates();
         loadFarms();
         loadEventsV2();
+        hologramsConfig = YamlConfiguration.loadConfiguration(hologramsFile);
     }
 
     public void loadMobTemplates() {
@@ -423,6 +427,14 @@ public class ConfigManager {
         return actions;
     }
 
+    private void setupHologramsFile() {
+        hologramsFile = new File(plugin.getDataFolder(), "holograms.yml");
+        if (!hologramsFile.exists()) {
+            plugin.saveResource("holograms.yml", false);
+        }
+        hologramsConfig = YamlConfiguration.loadConfiguration(hologramsFile);
+    }
+
 
     // The method signature and return type have changed!
     private List<RewardSet> parseRewards(ConfigurationSection section) {
@@ -546,4 +558,5 @@ public class ConfigManager {
     public MobInfo getMobTemplate(String templateId) { return mobTemplates.get(templateId); }
     public Map<String, OasisEvent> getEvents() { return Collections.unmodifiableMap(events); }
     public FileConfiguration getEventsConfig() { return eventsConfig; }
+    public FileConfiguration getHologramsConfig() { return hologramsConfig; }
 }
