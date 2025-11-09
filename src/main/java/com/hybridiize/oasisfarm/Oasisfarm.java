@@ -61,6 +61,7 @@ public final class Oasisfarm extends JavaPlugin {
         }
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             getLogger().info("Successfully hooked into PlaceholderAPI!");
+            new OasisFarmExpansion(this).register();
         } else {
             getLogger().warning("PlaceholderAPI not found! Placeholders will not work.");
         }

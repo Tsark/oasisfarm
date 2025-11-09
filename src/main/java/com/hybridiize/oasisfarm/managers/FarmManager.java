@@ -249,6 +249,11 @@ public class FarmManager {
     public boolean isTrackedMob(Entity entity) {
         return trackedMobs.containsKey(entity.getUniqueId());
     }
+    public int getTrackedMobCount(String farmId) {
+        return (int) trackedMobs.values().stream()
+                .filter(trackedMob -> trackedMob.getFarmId().equals(farmId))
+                .count();
+    }
     public TrackedMob getTrackedMob(Entity entity) {
         return trackedMobs.get(entity.getUniqueId());
     }
