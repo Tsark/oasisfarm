@@ -33,6 +33,19 @@ public class HologramManager {
         if (!decentHologramsEnabled) return;
 
         String hologramName = "oasisfarm-" + farm.getId();
+
+        // --- NEW LOGIC BLOCK ---
+        // If holograms are disabled for this farm, check if one exists and delete it.
+        // This ensures that setting it to 'false' in the config cleans up any old holograms.
+        if (!farm.isHologramEnabled()) {
+            Hologram hologram = DHAPI.getHologram(hologramName);
+            if (hologram != null) {
+                hologram.delete();
+            }
+            return; // Stop here, do not create/update.
+        }
+        // --- END OF NEW BLOCK ---
+
         Location location = getHologramLocation(farm);
 
         List<String> lines = new ArrayList<>();
@@ -44,6 +57,7 @@ public class HologramManager {
             return;
         }
 
+        // ... (rest of the method is identical)
         List<String> templateLines = hologramTemplate.getStringList("lines");
 
         // V2 Event System Integration
@@ -84,6 +98,7 @@ public class HologramManager {
     }
 
     private String processEventProgressLine(String line, ActiveEventTrackerV2 tracker) {
+        // ... (this method is identical)
         List<Condition> progressConditions = tracker.getCurrentPhase().getProgression().getConditions();
 
         for (Condition condition : progressConditions) {
@@ -108,12 +123,11 @@ public class HologramManager {
                 return line; // Return after processing the first valid condition
             }
         }
-
-        // If no progress condition was found, remove the line
         return null;
     }
 
     private long parseRequiredValue(String valueString) {
+        // ... (this method is identical)
         Matcher matcher = numberPattern.matcher(valueString);
         if (matcher.find()) {
             return Long.parseLong(matcher.group());
@@ -122,6 +136,7 @@ public class HologramManager {
     }
 
     public void removeFarmHologram(String farmId) {
+        // ... (this method is identical)
         if (!decentHologramsEnabled) return;
 
         String hologramName = "oasisfarm-" + farmId;
@@ -132,6 +147,7 @@ public class HologramManager {
     }
 
     public void removeAllHolograms() {
+        // ... (this method is identical)
         if (!decentHologramsEnabled) return;
         if (plugin.getConfigManager().getFarms() == null) return;
         for (Farm farm : plugin.getConfigManager().getFarms().values()) {
@@ -142,6 +158,7 @@ public class HologramManager {
 
 
     private Location getHologramLocation(Farm farm) {
+        // ... (this method is identical)
         Location pos1 = farm.getRegion().getPos1();
         Location pos2 = farm.getRegion().getPos2();
         double x = (pos1.getX() + pos2.getX()) / 2.0;

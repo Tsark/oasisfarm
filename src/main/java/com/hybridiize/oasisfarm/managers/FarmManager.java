@@ -103,8 +103,16 @@ public class FarmManager {
             @Override
             public void run() {
                 for (int i = 0; i < MAX_SPAWN_ATTEMPTS; i++) {
-                    Location spawnLocation = getRandomLocationInRegion(farm.getRegion());
-                    if (isSafeLocation(spawnLocation)) {
+
+                    // --- NEW SMARTER SPAWNING ---
+                    // Instead of getting a random (X,Y,Z) and checking if it's safe,
+                    // we get a random (X,Z) and find the highest safe (Y) for it.
+                    Location spawnLocation = findRandomSafeLocation(farm.getRegion());
+
+                    // If a safe location is found (not null)
+                    if (spawnLocation != null) {
+                        // ------------------------------
+
                         if (!spawnLocation.getChunk().isLoaded()) return;
 
                         if (plugin.isMythicMobsEnabled() && "MYTHIC".equals(finalMobToSpawnInfo.getMobType())) {
@@ -136,11 +144,89 @@ public class FarmManager {
                                 applyMobAttributes(spawnedMob, finalMobToSpawnInfo);
                             }
                         }
-                        return;
+                        return; // Successfully spawned, exit the runnable.
                     }
+                    // If spawnLocation was null, the loop continues to try again
                 }
             }
         }.runTask(plugin);
+    }
+
+    /**
+     * NEW METHOD for Smarter Spawning.
+     * Picks a random X/Z and scans down from the top of the region to find the first safe spawn location.
+     *
+     * @param region The region to search in.
+     * @return A safe Location to spawn a mob, or null if no spot was found in this column.
+     */
+    private Location findRandomSafeLocation(Region region) {
+        Location pos1 = region.getPos1();
+        Location pos2 = region.getPos2();
+        World world = pos1.getWorld();
+        if (world == null) return null;
+
+        double minX = Math.min(pos1.getX(), pos2.getX());
+        double maxX = Math.max(pos1.getX(), pos2.getX());
+        double minY = Math.min(pos1.getY(), pos2.getY());
+        double maxY = Math.max(pos1.getY(), pos2.getY());
+        double minZ = Math.min(pos1.getZ(), pos2.getZ());
+        double maxZ = Math.max(pos1.getZ(), pos2.getZ());
+
+        // 1. Pick random X and Z
+        double x = ThreadLocalRandom.current().nextDouble(minX, maxX);
+        double z = ThreadLocalRandom.current().nextDouble(minZ, maxZ);
+
+        // 2. Start from the top of the region and scan down for a safe spot
+        // We scan from +0.5 to be in the middle of the block column
+        for (int y = (int) Math.floor(maxY); y >= (int) Math.floor(minY); y--) {
+            Location loc = new Location(world, x, y, z);
+            if (isSafeLocation(loc)) {
+                return loc; // Found a valid spot
+            }
+        }
+
+        return null; // No safe spot found in this X/Z column
+    }
+
+
+    /**
+     * NEW METHOD for the /of mob kill command.
+     * Kills tracked mobs based on filters.
+     *
+     * @param farmIdFilter   The farm ID to filter by, or "all".
+     * @param templateIdFilter The mob template ID to filter by, or "all".
+     * @return The number of mobs successfully killed.
+     */
+    public int killTrackedMobs(String farmIdFilter, String templateIdFilter) {
+        int killCount = 0;
+
+        // We must iterate over a *copy* of the keySet to avoid a ConcurrentModificationException
+        // while removing entities from the map.
+        Set<UUID> mobIds = new HashSet<>(trackedMobs.keySet());
+
+        for (UUID mobId : mobIds) {
+            TrackedMob trackedInfo = trackedMobs.get(mobId);
+
+            // This can happen if the mob was already removed but not yet untracked
+            if (trackedInfo == null) {
+                continue;
+            }
+
+            // Check if the mob matches our filters
+            boolean farmMatch = farmIdFilter.equalsIgnoreCase("all") || trackedInfo.getFarmId().equalsIgnoreCase(farmIdFilter);
+            boolean templateMatch = templateIdFilter.equalsIgnoreCase("all") || trackedInfo.getTemplateId().equalsIgnoreCase(templateIdFilter);
+
+            if (farmMatch && templateMatch) {
+                Entity mob = Bukkit.getEntity(mobId);
+                if (mob != null && !mob.isDead()) {
+                    mob.remove(); // Safely kill and remove the mob
+                    killCount++;
+                }
+                // Whether the mob was null or not, we remove it from tracking
+                trackedMobs.remove(mobId);
+            }
+        }
+        return killCount;
     }
 
     public void spawnSpecificMob(Farm farm, String mobId, int amount) {
@@ -152,6 +238,12 @@ public class FarmManager {
 
         for (int i = 0; i < amount; i++) {
             Location spawnLocation = farm.getRegion().getCenter();
+
+            // We could also apply the smart spawning here, but center is usually safe.
+            // For now, we leave it as-is to respect the original logic.
+            // If you want to change this, replace the line above with:
+            // Location spawnLocation = findRandomSafeLocation(farm.getRegion());
+            // if (spawnLocation == null) spawnLocation = farm.getRegion().getCenter(); // Fallback
 
             if (plugin.isMythicMobsEnabled() && "MYTHIC".equals(mobInfo.getMobType())) {
                 try {
@@ -235,6 +327,8 @@ public class FarmManager {
             }
         }
     }
+
+    // This method is still needed for spawnSpecificMob, so we leave it unchanged.
     private Location getRandomLocationInRegion(Region region) {
         Location pos1 = region.getPos1();
         Location pos2 = region.getPos2();

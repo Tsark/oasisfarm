@@ -7,18 +7,20 @@ public class Farm {
     private final Region region;
     private final int maxMobs;
     private final int entryCooldown;
+    private final boolean hologramEnabled; // --- NEW FIELD ---
     // Map<TemplateID, SpawnChance>
     private final Map<String, Double> mobs;
 
     // This value is not stored in config, it's used at runtime by the FarmManager
     private long lastSpawnTick = 0;
 
-    public Farm(String id, Region region, int maxMobs, int entryCooldown, Map<String, Double> mobs) {
+    public Farm(String id, Region region, int maxMobs, int entryCooldown, Map<String, Double> mobs, boolean hologramEnabled) {
         this.id = id;
         this.region = region;
         this.maxMobs = maxMobs;
         this.entryCooldown = entryCooldown;
         this.mobs = mobs;
+        this.hologramEnabled = hologramEnabled; // --- ADDED THIS ---
     }
 
     // --- GETTERS ---
@@ -40,6 +42,11 @@ public class Farm {
 
     public Map<String, Double> getMobs() {
         return mobs;
+    }
+
+    // --- NEW GETTER ---
+    public boolean isHologramEnabled() {
+        return hologramEnabled;
     }
 
     // --- RUNTIME GETTERS/SETTERS ---

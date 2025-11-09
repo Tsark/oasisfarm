@@ -53,6 +53,11 @@ public class CreateCommand extends SubCommand {
         config.set(path + ".max-mobs", 10);
         config.set(path + ".mobs.starter_zombie", 1.0); // Default to a known template
 
+        // --- NEW DEFAULTS ---
+        config.set(path + ".hologram-enabled", true);
+        config.set(path + ".hologram-template", "default-farm-hologram");
+        // --------------------
+
         plugin.saveConfig();
         plugin.getConfigManager().loadAllConfigs();
 

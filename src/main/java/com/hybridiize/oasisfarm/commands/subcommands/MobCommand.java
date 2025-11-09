@@ -20,6 +20,7 @@ public class MobCommand extends SubCommand {
         subCommands.add(new MobSetItemCommand());
         subCommands.add(new MobSetNameCommand());
         subCommands.add(new MobSpawnCommand());
+        subCommands.add(new MobKillCommand());
     }
 
     @Override

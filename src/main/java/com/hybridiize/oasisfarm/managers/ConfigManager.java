@@ -179,6 +179,11 @@ public class ConfigManager {
                 Region region = new Region(pos1, pos2);
                 int maxMobs = farmSection.getInt("max-mobs");
                 int entryCooldown = farmSection.getInt("entry-cooldown", 0);
+
+                // --- NEW LINE ---
+                // Defaults to 'true' for backward-compatibility if the option is missing
+                boolean hologramEnabled = farmSection.getBoolean("hologram-enabled", true);
+
                 Map<String, Double> mobs = new HashMap<>();
                 ConfigurationSection mobsSection = farmSection.getConfigurationSection("mobs");
                 if (mobsSection != null) {
@@ -190,7 +195,10 @@ public class ConfigManager {
                         mobs.put(templateId, mobsSection.getDouble(templateId));
                     }
                 }
-                Farm farm = new Farm(farmId, region, maxMobs, entryCooldown, mobs);
+
+                // --- UPDATED CONSTRUCTOR ---
+                Farm farm = new Farm(farmId, region, maxMobs, entryCooldown, mobs, hologramEnabled);
+
                 farms.put(farmId, farm);
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to load farm '" + farmId + "'. Reason: " + e.getMessage(), e);
