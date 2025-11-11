@@ -1,6 +1,8 @@
 package com.hybridiize.oasisfarm;
 
 import com.hybridiize.oasisfarm.commands.CommandManager;
+import com.hybridiize.oasisfarm.farm.Farm;
+import com.hybridiize.oasisfarm.farm.TrackedMob;
 import com.hybridiize.oasisfarm.listeners.MobKillListener;
 import com.hybridiize.oasisfarm.listeners.MythicMobListener;
 import com.hybridiize.oasisfarm.listeners.PlayerMoveListener;
@@ -97,13 +99,24 @@ public final class Oasisfarm extends JavaPlugin {
             Set<UUID> mobIds = new HashSet<>(farmManager.getTrackedMobIds());
             int removedCount = 0;
             for (UUID mobId : mobIds) {
+
+                // --- NEW SAFETY CHECK ---
+                TrackedMob trackedInfo = farmManager.getTrackedMob(Bukkit.getEntity(mobId));
+                if (trackedInfo != null) {
+                    Farm farm = configManager.getFarms().get(trackedInfo.getFarmId());
+                    if (farm != null && farm.getSpawningType().equals("static")) {
+                        continue; // Do not remove mobs from static farms
+                    }
+                }
+                // --- END NEW CHECK ---
+
                 Entity mob = Bukkit.getEntity(mobId);
                 if (mob != null) {
                     mob.remove();
                     removedCount++;
                 }
             }
-            getLogger().info("Successfully removed " + removedCount + " mobs.");
+            getLogger().info("Successfully removed " + removedCount + " non-static mobs.");
         }
 
         // Remove all holograms

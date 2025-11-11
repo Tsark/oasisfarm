@@ -2,6 +2,7 @@ package com.hybridiize.oasisfarm.managers;
 
 import com.hybridiize.oasisfarm.Oasisfarm;
 import com.hybridiize.oasisfarm.farm.Farm;
+import com.hybridiize.oasisfarm.farm.FarmMobConfig; // --- NEW IMPORT ---
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.Region;
 import com.hybridiize.oasisfarm.farm.TrackedMob;
@@ -9,7 +10,7 @@ import io.lumine.mythic.api.MythicProvider;
 import io.lumine.mythic.api.adapters.AbstractLocation;
 import io.lumine.mythic.api.mobs.MobManager;
 import io.lumine.mythic.api.mobs.MythicMob;
-import io.lumine.mythic.bukkit.BukkitAdapter; // Modern API requires this for location conversion
+import io.lumine.mythic.bukkit.BukkitAdapter;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -18,6 +19,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
@@ -43,14 +45,21 @@ public class FarmManager {
             @Override
             public void run() {
                 for (Farm farm : plugin.getConfigManager().getFarms().values()) {
-                    processFarm(farm);
+                    if (farm.getSpawningType().equals("efficient") || farm.getSpawningType().equals("static")) {
+                        processEfficientOrStaticFarm(farm);
+                    }
                 }
             }
-        }.runTaskTimer(plugin, 0L, 20L);
+        }.runTaskTimer(plugin, 0L, 20L); // Ticks every second
     }
 
-    private void processFarm(Farm farm) {
+    private void processEfficientOrStaticFarm(Farm farm) {
+
         long baseInterval = plugin.getConfig().getLong("farm-check-interval", 100L);
+        if (farm.getSpawningType().equals("static")) {
+            baseInterval = 600L;
+        }
+
         if (System.currentTimeMillis() - farm.getLastSpawnTick() < baseInterval * 50) {
             return;
         }
@@ -58,7 +67,18 @@ public class FarmManager {
 
         Region region = farm.getRegion();
         World world = region.getPos1().getWorld();
-        if (world == null || (!world.isChunkLoaded(region.getPos1().getBlockX() >> 4, region.getPos1().getBlockZ() >> 4) && !world.isChunkLoaded(region.getPos2().getBlockX() >> 4, region.getPos2().getBlockZ() >> 4))) {
+        if (world == null) {
+            return;
+        }
+
+        List<Player> playersInFarm = new ArrayList<>();
+        for (Player player : world.getPlayers()) {
+            if (farm.getRegion().contains(player.getLocation())) {
+                playersInFarm.add(player);
+            }
+        }
+
+        if (playersInFarm.isEmpty() && farm.getSpawningType().equals("efficient")) {
             return;
         }
 
@@ -67,32 +87,81 @@ public class FarmManager {
         plugin.getHologramManager().createOrUpdateFarmHologram(farm, (int) currentMobCount);
 
         if (farm.getMaxMobs() - currentMobCount > 0) {
-            spawnMobInFarm(farm);
+
+            Location spawnCenter;
+            if (!playersInFarm.isEmpty()) {
+                spawnCenter = playersInFarm.get(ThreadLocalRandom.current().nextInt(playersInFarm.size())).getLocation();
+            } else {
+                spawnCenter = farm.getRegion().getCenter();
+            }
+
+            spawnMobInFarm(farm, spawnCenter, (int) currentMobCount); // --- Pass currentMobCount ---
         }
     }
 
-    private void spawnMobInFarm(Farm farm) {
-        Map<String, Double> mobs = farm.getMobs();
-        if (mobs.isEmpty()) return;
+    // --- NEW HELPER FUNCTION ---
+    /**
+     * Counts all tracked mobs in a farm, grouped by their template ID.
+     * @param farmId The farm to check.
+     * @return A map of [TemplateID -> Count]
+     */
+    private Map<String, Integer> countMobsByType(String farmId) {
+        Map<String, Integer> counts = new HashMap<>();
+        for (TrackedMob mob : trackedMobs.values()) {
+            if (mob.getFarmId().equals(farmId)) {
+                counts.put(mob.getTemplateId(), counts.getOrDefault(mob.getTemplateId(), 0) + 1);
+            }
+        }
+        return counts;
+    }
 
-        double roll = ThreadLocalRandom.current().nextDouble();
+    // --- SIGNATURE UPDATED: Now takes current mob count ---
+    private void spawnMobInFarm(Farm farm, Location spawnCenter, int currentMobCount) {
+
+        // --- NEW LOGIC: Filter mobs based on per-mob cap ---
+        Map<String, Integer> currentMobCounts = countMobsByType(farm.getId());
+
+        List<FarmMobConfig> spawnableMobs = new ArrayList<>();
+        double totalChance = 0.0;
+
+        for (FarmMobConfig mobConfig : farm.getMobs().values()) {
+            int maxPerFarm = mobConfig.getMaxPerFarm();
+            int currentPerMob = currentMobCounts.getOrDefault(mobConfig.getTemplateId(), 0);
+
+            // Check if this mob type is eligible to spawn
+            if (maxPerFarm == -1 || currentPerMob < maxPerFarm) {
+                spawnableMobs.add(mobConfig);
+                totalChance += mobConfig.getChance();
+            }
+        }
+        // --- END NEW LOGIC ---
+
+        if (spawnableMobs.isEmpty()) {
+            // Nothing is eligible to spawn (e.g., all mobs are at their per-mob cap)
+            return;
+        }
+
+        // --- UPDATED LOGIC: Roll based on the *filtered* list ---
+        double roll = ThreadLocalRandom.current().nextDouble() * totalChance;
         double cumulativeChance = 0.0;
-        String chosenTemplateId = null;
-        for (Map.Entry<String, Double> entry : mobs.entrySet()) {
-            cumulativeChance += entry.getValue();
+        FarmMobConfig chosenMobConfig = null;
+        for (FarmMobConfig mobConfig : spawnableMobs) {
+            cumulativeChance += mobConfig.getChance();
             if (roll <= cumulativeChance) {
-                chosenTemplateId = entry.getKey();
+                chosenMobConfig = mobConfig;
                 break;
             }
         }
-        if (chosenTemplateId == null && !mobs.isEmpty()) {
-            chosenTemplateId = new ArrayList<>(mobs.keySet()).get(0);
-        }
-        if (chosenTemplateId == null) return;
 
-        MobInfo mobToSpawnInfo = plugin.getConfigManager().getMobTemplate(chosenTemplateId);
+        if (chosenMobConfig == null) {
+            // Fallback just in case of floating point rounding errors
+            chosenMobConfig = spawnableMobs.get(ThreadLocalRandom.current().nextInt(spawnableMobs.size()));
+        }
+        // --- END UPDATED LOGIC ---
+
+        MobInfo mobToSpawnInfo = plugin.getConfigManager().getMobTemplate(chosenMobConfig.getTemplateId());
         if (mobToSpawnInfo == null) {
-            plugin.getLogger().warning("Attempted to spawn a null mob template: " + chosenTemplateId);
+            plugin.getLogger().warning("Attempted to spawn a null mob template: " + chosenMobConfig.getTemplateId());
             return;
         }
 
@@ -103,17 +172,13 @@ public class FarmManager {
             @Override
             public void run() {
                 for (int i = 0; i < MAX_SPAWN_ATTEMPTS; i++) {
-
-                    // --- NEW SMARTER SPAWNING ---
-                    // Instead of getting a random (X,Y,Z) and checking if it's safe,
-                    // we get a random (X,Z) and find the highest safe (Y) for it.
-                    Location spawnLocation = findRandomSafeLocation(farm.getRegion());
-
-                    // If a safe location is found (not null)
+                    Location spawnLocation = findRandomSafeLocationNear(spawnCenter, farm.getRegion());
                     if (spawnLocation != null) {
-                        // ------------------------------
+                        if (!spawnLocation.getChunk().isLoaded()) {
+                            continue;
+                        }
 
-                        if (!spawnLocation.getChunk().isLoaded()) return;
+                        LivingEntity spawnedMob = null;
 
                         if (plugin.isMythicMobsEnabled() && "MYTHIC".equals(finalMobToSpawnInfo.getMobType())) {
                             try {
@@ -121,15 +186,11 @@ public class FarmManager {
                                 Optional<MythicMob> mythicMobOptional = mobManager.getMythicMob(finalMobToSpawnInfo.getMythicId());
                                 if (mythicMobOptional.isPresent()) {
                                     MythicMob mythicMob = mythicMobOptional.get();
-
-                                    // This is the correct, modern way to convert a Bukkit Location
                                     AbstractLocation mythicLocation = BukkitAdapter.adapt(spawnLocation);
-
-                                    // Spawn the mob and capture the result to track it
                                     io.lumine.mythic.core.mobs.ActiveMob activeMob = mythicMob.spawn(mythicLocation, finalMobToSpawnInfo.getMythicLevel());
 
                                     if (activeMob != null && activeMob.getEntity().getBukkitEntity() instanceof LivingEntity) {
-                                        trackMob((LivingEntity) activeMob.getEntity().getBukkitEntity(), farm.getId(), finalMobToSpawnInfo.getTemplateId());
+                                        spawnedMob = (LivingEntity) activeMob.getEntity().getBukkitEntity();
                                     }
                                 } else {
                                     plugin.getLogger().warning("Attempted to spawn Mythic Mob '" + finalMobToSpawnInfo.getMythicId() + "' but it was not found.");
@@ -138,31 +199,34 @@ public class FarmManager {
                                 plugin.getLogger().log(Level.SEVERE, "An unexpected error occurred while spawning Mythic Mob '" + finalMobToSpawnInfo.getMythicId() + "'", e);
                             }
                         } else {
-                            LivingEntity spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, finalMobToSpawnInfo.getType());
-                            if (spawnedMob != null) {
-                                trackMob(spawnedMob, farm.getId(), finalMobToSpawnInfo.getTemplateId());
+                            spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, finalMobToSpawnInfo.getType());
+                        }
+
+                        if (spawnedMob != null) {
+                            trackMob(spawnedMob, farm.getId(), finalMobToSpawnInfo.getTemplateId());
+
+                            if (!"MYTHIC".equals(finalMobToSpawnInfo.getMobType())) {
                                 applyMobAttributes(spawnedMob, finalMobToSpawnInfo);
                             }
+
+                            if (farm.getSpawningType().equals("static")) {
+                                spawnedMob.setPersistent(true);
+                            }
                         }
-                        return; // Successfully spawned, exit the runnable.
+
+                        return;
                     }
-                    // If spawnLocation was null, the loop continues to try again
                 }
             }
         }.runTask(plugin);
     }
 
-    /**
-     * NEW METHOD for Smarter Spawning.
-     * Picks a random X/Z and scans down from the top of the region to find the first safe spawn location.
-     *
-     * @param region The region to search in.
-     * @return A safe Location to spawn a mob, or null if no spot was found in this column.
-     */
-    private Location findRandomSafeLocation(Region region) {
+    // ... (rest of FarmManager.java is unchanged: findRandomSafeLocationNear, killTrackedMobs, spawnSpecificMob, helpers, etc.)
+
+    private Location findRandomSafeLocationNear(Location center, Region region) {
         Location pos1 = region.getPos1();
         Location pos2 = region.getPos2();
-        World world = pos1.getWorld();
+        World world = center.getWorld();
         if (world == null) return null;
 
         double minX = Math.min(pos1.getX(), pos2.getX());
@@ -172,57 +236,46 @@ public class FarmManager {
         double minZ = Math.min(pos1.getZ(), pos2.getZ());
         double maxZ = Math.max(pos1.getZ(), pos2.getZ());
 
-        // 1. Pick random X and Z
-        double x = ThreadLocalRandom.current().nextDouble(minX, maxX);
-        double z = ThreadLocalRandom.current().nextDouble(minZ, maxZ);
+        double x = center.getX() + (ThreadLocalRandom.current().nextDouble(64.0) - 32.0);
+        double z = center.getZ() + (ThreadLocalRandom.current().nextDouble(64.0) - 32.0);
 
-        // 2. Start from the top of the region and scan down for a safe spot
-        // We scan from +0.5 to be in the middle of the block column
+        x = Math.max(minX, Math.min(maxX, x));
+        z = Math.max(minZ, Math.min(maxZ, z));
+
         for (int y = (int) Math.floor(maxY); y >= (int) Math.floor(minY); y--) {
             Location loc = new Location(world, x, y, z);
             if (isSafeLocation(loc)) {
-                return loc; // Found a valid spot
+                return loc;
             }
         }
 
-        return null; // No safe spot found in this X/Z column
+        return null;
     }
 
-
-    /**
-     * NEW METHOD for the /of mob kill command.
-     * Kills tracked mobs based on filters.
-     *
-     * @param farmIdFilter   The farm ID to filter by, or "all".
-     * @param templateIdFilter The mob template ID to filter by, or "all".
-     * @return The number of mobs successfully killed.
-     */
     public int killTrackedMobs(String farmIdFilter, String templateIdFilter) {
         int killCount = 0;
-
-        // We must iterate over a *copy* of the keySet to avoid a ConcurrentModificationException
-        // while removing entities from the map.
         Set<UUID> mobIds = new HashSet<>(trackedMobs.keySet());
 
         for (UUID mobId : mobIds) {
             TrackedMob trackedInfo = trackedMobs.get(mobId);
-
-            // This can happen if the mob was already removed but not yet untracked
             if (trackedInfo == null) {
                 continue;
             }
 
-            // Check if the mob matches our filters
+            Farm farm = plugin.getConfigManager().getFarms().get(trackedInfo.getFarmId());
+            if (farm != null && farm.getSpawningType().equals("static")) {
+                continue;
+            }
+
             boolean farmMatch = farmIdFilter.equalsIgnoreCase("all") || trackedInfo.getFarmId().equalsIgnoreCase(farmIdFilter);
             boolean templateMatch = templateIdFilter.equalsIgnoreCase("all") || trackedInfo.getTemplateId().equalsIgnoreCase(templateIdFilter);
 
             if (farmMatch && templateMatch) {
                 Entity mob = Bukkit.getEntity(mobId);
                 if (mob != null && !mob.isDead()) {
-                    mob.remove(); // Safely kill and remove the mob
+                    mob.remove();
                     killCount++;
                 }
-                // Whether the mob was null or not, we remove it from tracking
                 trackedMobs.remove(mobId);
             }
         }
@@ -237,13 +290,12 @@ public class FarmManager {
         }
 
         for (int i = 0; i < amount; i++) {
-            Location spawnLocation = farm.getRegion().getCenter();
+            Location spawnLocation = findRandomSafeLocationNear(farm.getRegion().getCenter(), farm.getRegion());
+            if (spawnLocation == null) {
+                spawnLocation = farm.getRegion().getCenter();
+            }
 
-            // We could also apply the smart spawning here, but center is usually safe.
-            // For now, we leave it as-is to respect the original logic.
-            // If you want to change this, replace the line above with:
-            // Location spawnLocation = findRandomSafeLocation(farm.getRegion());
-            // if (spawnLocation == null) spawnLocation = farm.getRegion().getCenter(); // Fallback
+            LivingEntity spawnedMob = null;
 
             if (plugin.isMythicMobsEnabled() && "MYTHIC".equals(mobInfo.getMobType())) {
                 try {
@@ -251,11 +303,12 @@ public class FarmManager {
                     Optional<MythicMob> mythicMobOptional = mobManager.getMythicMob(mobInfo.getMythicId());
                     if (mythicMobOptional.isPresent()) {
                         MythicMob mythicMob = mythicMobOptional.get();
-
-                        // Use the modern location adapter here as well
                         AbstractLocation mythicLocation = BukkitAdapter.adapt(spawnLocation);
+                        io.lumine.mythic.core.mobs.ActiveMob activeMob = mythicMob.spawn(mythicLocation, mobInfo.getMythicLevel());
 
-                        mythicMob.spawn(mythicLocation, mobInfo.getMythicLevel());
+                        if (activeMob != null && activeMob.getEntity().getBukkitEntity() instanceof LivingEntity) {
+                            spawnedMob = (LivingEntity) activeMob.getEntity().getBukkitEntity();
+                        }
                     } else {
                         plugin.getLogger().warning("Event tried to spawn specific Mythic Mob '" + mobInfo.getMythicId() + "' but it was not found.");
                     }
@@ -263,16 +316,21 @@ public class FarmManager {
                     plugin.getLogger().log(Level.SEVERE, "Event failed to spawn specific Mythic Mob: " + mobInfo.getMythicId(), e);
                 }
             } else {
-                LivingEntity spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, mobInfo.getType());
-                if (spawnedMob != null) {
+                spawnedMob = (LivingEntity) spawnLocation.getWorld().spawnEntity(spawnLocation, mobInfo.getType());
+            }
+
+            if (spawnedMob != null) {
+                if (farm.getSpawningType().equals("static")) {
+                    spawnedMob.setPersistent(true);
+                }
+
+                if (!"MYTHIC".equals(mobInfo.getMobType())) {
                     applyMobAttributes(spawnedMob, mobInfo);
                 }
             }
         }
     }
 
-    // --- All other helper methods remain the same ---
-    // (isSafeLocation, applyMobAttributes, getRandomLocationInRegion, tracking methods, etc.)
     private boolean isSafeLocation(Location loc) {
         if (loc.getWorld() == null || !loc.getWorld().getWorldBorder().isInside(loc)) return false;
         org.bukkit.block.Block feetBlock = loc.getBlock();
@@ -280,6 +338,7 @@ public class FarmManager {
         org.bukkit.block.Block groundBlock = feetBlock.getRelative(BlockFace.DOWN);
         return groundBlock.getType().isSolid() && !groundBlock.isLiquid() && feetBlock.isPassable() && !feetBlock.isLiquid() && headBlock.isPassable() && !headBlock.isLiquid();
     }
+
     public void applyMobAttributes(LivingEntity mob, MobInfo mobInfo) {
         if (mobInfo.getDisplayName() != null && !mobInfo.getDisplayName().isEmpty()) {
             mob.setCustomName(mobInfo.getDisplayName());
@@ -328,7 +387,6 @@ public class FarmManager {
         }
     }
 
-    // This method is still needed for spawnSpecificMob, so we leave it unchanged.
     private Location getRandomLocationInRegion(Region region) {
         Location pos1 = region.getPos1();
         Location pos2 = region.getPos2();
@@ -340,24 +398,30 @@ public class FarmManager {
         double maxZ = Math.max(pos1.getZ(), pos2.getZ());
         return new Location(pos1.getWorld(), ThreadLocalRandom.current().nextDouble(minX, maxX), ThreadLocalRandom.current().nextDouble(minY, maxY), ThreadLocalRandom.current().nextDouble(minZ, maxZ));
     }
+
     public boolean isTrackedMob(Entity entity) {
         return trackedMobs.containsKey(entity.getUniqueId());
     }
+
     public int getTrackedMobCount(String farmId) {
         return (int) trackedMobs.values().stream()
                 .filter(trackedMob -> trackedMob.getFarmId().equals(farmId))
                 .count();
     }
+
     public TrackedMob getTrackedMob(Entity entity) {
         return trackedMobs.get(entity.getUniqueId());
     }
+
     public void untrackMob(Entity entity) {
         trackedMobs.remove(entity.getUniqueId());
     }
+
     public void trackMob(LivingEntity mob, String farmId, String templateId) {
         if (mob == null || farmId == null || templateId == null) return;
         trackedMobs.put(mob.getUniqueId(), new TrackedMob(farmId, templateId));
     }
+
     public Set<UUID> getTrackedMobIds() {
         return trackedMobs.keySet();
     }

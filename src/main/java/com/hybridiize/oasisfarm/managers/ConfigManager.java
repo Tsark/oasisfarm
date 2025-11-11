@@ -9,6 +9,7 @@ import com.hybridiize.oasisfarm.event.v2.*;
 import java.util.Collections;
 import java.util.logging.Level;
 import com.hybridiize.oasisfarm.farm.Farm;
+import com.hybridiize.oasisfarm.farm.FarmMobConfig;
 import com.hybridiize.oasisfarm.farm.MobInfo;
 import com.hybridiize.oasisfarm.farm.Region;
 import com.hybridiize.oasisfarm.rewards.*;
@@ -180,11 +181,11 @@ public class ConfigManager {
                 int maxMobs = farmSection.getInt("max-mobs");
                 int entryCooldown = farmSection.getInt("entry-cooldown", 0);
 
-                // --- NEW LINE ---
-                // Defaults to 'true' for backward-compatibility if the option is missing
                 boolean hologramEnabled = farmSection.getBoolean("hologram-enabled", true);
+                String spawningType = farmSection.getString("spawning-type", "efficient").toLowerCase();
 
-                Map<String, Double> mobs = new HashMap<>();
+                // --- NEW LOADING LOGIC ---
+                Map<String, FarmMobConfig> mobs = new HashMap<>();
                 ConfigurationSection mobsSection = farmSection.getConfigurationSection("mobs");
                 if (mobsSection != null) {
                     for (String templateId : mobsSection.getKeys(false)) {
@@ -192,12 +193,28 @@ public class ConfigManager {
                             plugin.getLogger().warning("Farm '" + farmId + "' uses unknown mob template '" + templateId + "'. Skipping.");
                             continue;
                         }
-                        mobs.put(templateId, mobsSection.getDouble(templateId));
+
+                        FarmMobConfig mobConfig;
+                        if (mobsSection.isConfigurationSection(templateId)) {
+                            // This is the NEW map format
+                            ConfigurationSection section = mobsSection.getConfigurationSection(templateId);
+                            double chance = section.getDouble("chance", 0.0);
+                            int maxPerFarm = section.getInt("max-per-farm", -1); // -1 means unlimited
+                            mobConfig = new FarmMobConfig(templateId, chance, maxPerFarm);
+                        } else if (mobsSection.isDouble(templateId) || mobsSection.isInt(templateId)) {
+                            // This is the OLD format (e.g., starter_zombie: 0.8)
+                            double chance = mobsSection.getDouble(templateId);
+                            mobConfig = new FarmMobConfig(templateId, chance, -1); // -1 means unlimited
+                        } else {
+                            plugin.getLogger().warning("Invalid format for mob '" + templateId + "' in farm '" + farmId + "'. Skipping.");
+                            continue;
+                        }
+                        mobs.put(templateId, mobConfig);
                     }
                 }
+                // --- END NEW LOGIC ---
 
-                // --- UPDATED CONSTRUCTOR ---
-                Farm farm = new Farm(farmId, region, maxMobs, entryCooldown, mobs, hologramEnabled);
+                Farm farm = new Farm(farmId, region, maxMobs, entryCooldown, mobs, hologramEnabled, spawningType);
 
                 farms.put(farmId, farm);
             } catch (Exception e) {

@@ -1,6 +1,7 @@
 package com.hybridiize.oasisfarm.commands.subcommands.mob_subcommands;
 
 import com.hybridiize.oasisfarm.farm.Farm;
+import com.hybridiize.oasisfarm.farm.FarmMobConfig; // --- IMPORT ADDED ---
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
@@ -30,17 +31,26 @@ public class MobListCommand extends MobSubCommand {
             return;
         }
 
-        player.sendMessage(ChatColor.GOLD + "--- Mobs for " + farm.getId() + " ---");
+        player.sendMessage(ChatColor.GOLD + "--- Mobs for " + farm.getId() + " (Type: " + farm.getSpawningType() + ") ---");
         if (farm.getMobs().isEmpty()) {
             player.sendMessage(ChatColor.YELLOW + "This farm has no mobs configured.");
             return;
         }
 
         double totalChance = 0;
-        for (Map.Entry<String, Double> entry : farm.getMobs().entrySet()) {
+        // --- THIS IS THE CORRECTED LOOP ---
+        for (Map.Entry<String, FarmMobConfig> entry : farm.getMobs().entrySet()) {
+            FarmMobConfig mobConfig = entry.getValue();
+            double chance = mobConfig.getChance();
+            int maxCap = mobConfig.getMaxPerFarm();
+
+            String capDisplay = (maxCap == -1) ? "None" : String.valueOf(maxCap);
+
             player.sendMessage(ChatColor.AQUA + entry.getKey() + ": " +
-                    ChatColor.WHITE + String.format("%.2f", entry.getValue() * 100) + "%");
-            totalChance += entry.getValue();
+                    ChatColor.WHITE + String.format("%.2f", chance * 100) + "%" +
+                    ChatColor.GRAY + " (Cap: " + capDisplay + ")");
+
+            totalChance += chance;
         }
         player.sendMessage(ChatColor.GRAY + "Total Chance: " + String.format("%.2f", totalChance * 100) + "%");
     }
