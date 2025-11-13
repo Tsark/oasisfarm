@@ -45,4 +45,3 @@ farms:
     hologram-template: "boss-arena-hologram"
     possible-events:
       - 'blood_moon' # The ID must match an event in events.yml
-}

@@ -49,12 +49,15 @@ public class MobAddCommand extends MobSubCommand {
             return;
         }
 
+        // --- UPDATED to new map structure ---
+        // This command will add mobs in the new, preferred format
         String mobPath = farmPath + ".mobs." + templateId;
-        config.set(mobPath, chance);
+        config.set(mobPath + ".chance", chance);
+        config.set(mobPath + ".max-per-farm", -1); // Default to no limit
 
         plugin.saveConfig();
         plugin.getConfigManager().loadAllConfigs();
         player.sendMessage(ChatColor.GREEN + "Added " + templateId + " to farm " + farmId + " with a " + (chance * 100) + "% chance.");
-        player.sendMessage(ChatColor.YELLOW + "You may want to run '/of mob rebalance " + farmId + "' to ensure chances total 100%.");
+        player.sendMessage(ChatColor.YELLOW + "Run '/of mob list " + farmId + "' to see the new config.");
     }
 }
